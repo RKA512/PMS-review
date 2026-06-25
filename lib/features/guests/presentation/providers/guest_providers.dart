@@ -3,12 +3,14 @@
 /// Implements [Architecture Rule AR-011] and handles search, states, and operations.
 library;
 
+import '../../../../core/database/database_helper.dart';
 import '../../../../core/providers/session_providers.dart';
 import '../../../../core/services/audit_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/guest.dart';
 import '../../domain/repositories/guest_repository.dart';
 import '../../data/repositories/guest_repository_impl.dart';
+import '../../data/datasources/guest_local_datasource_impl.dart';
 import '../../domain/usecases/get_guests.dart';
 import '../../domain/usecases/create_guest.dart';
 import '../../domain/usecases/update_guest.dart';
@@ -18,9 +20,14 @@ import '../../domain/usecases/search_guests.dart';
 import '../../domain/usecases/save_guest_contact.dart';
 import '../../domain/usecases/delete_guest_contact.dart';
 
+// Data Source
+final guestLocalDataSourceProvider = Provider((ref) {
+  return GuestLocalDataSourceImpl(DatabaseHelper.instance);
+});
+
 // Repository Provider
 final guestRepositoryProvider = Provider<GuestRepository>((ref) {
-  return GuestRepositoryImpl();
+  return GuestRepositoryImpl(ref.watch(guestLocalDataSourceProvider));
 });
 
 // Use Case Providers

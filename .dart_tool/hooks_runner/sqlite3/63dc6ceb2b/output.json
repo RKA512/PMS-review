@@ -2,7 +2,7 @@
   "assets": [
     {
       "encoding": {
-        "file": "E:\\Project\\PMS\\.dart_tool\\hooks_runner\\shared\\sqlite3\\build\\download-d83b988\\sqlite3.dll",
+        "file": "E:\\Project\\PMS\\.dart_tool\\hooks_runner\\shared\\sqlite3\\build\\download-14619f80\\sqlite3.dll",
         "id": "package:sqlite3/src/ffi/libsqlite3.g.dart",
         "link_mode": {
           "type": "dynamic_loading_bundle"
@@ -13,5 +13,5 @@
   ],
   "assets_for_linking": {},
   "status": "success",
-  "timestamp": "2026-06-25 02:35:14.000"
+  "timestamp": "2026-06-26 00:40:32.000"
 }

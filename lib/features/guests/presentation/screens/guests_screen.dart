@@ -13,7 +13,7 @@ import '../../../../core/errors/failure.dart';
 import '../../../../core/providers/session_providers.dart';
 
 class GuestsScreen extends ConsumerStatefulWidget {
-  const GuestsScreen({Key? key}) : super(key: key);
+  const GuestsScreen({super.key});
 
   @override
   ConsumerState<GuestsScreen> createState() => _GuestsScreenState();
@@ -114,7 +114,7 @@ class _GuestsScreenState extends ConsumerState<GuestsScreen> {
               Navigator.pop(dialogCtx);
               try {
                 await ref.read(unarchiveGuestUseCaseProvider)(guest.id!, authenticatedUserId);
-                if (!mounted) return;
+                if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('تمت استعادة ملف الضيف بنجاح.')),
                 );
@@ -124,7 +124,7 @@ class _GuestsScreenState extends ConsumerState<GuestsScreen> {
                       includeArchived: ref.read(guestIncludeArchivedProvider),
                     );
               } catch (e) {
-                if (!mounted) return;
+                if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('فشلت عملية الاستعادة: $e')),
                 );
@@ -186,7 +186,7 @@ class _GuestsScreenState extends ConsumerState<GuestsScreen> {
               Navigator.pop(dialogCtx);
               try {
                 await ref.read(archiveGuestUseCaseProvider)(guest.id!, authenticatedUserId);
-                if (!mounted) return;
+                if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('تمت أرشفة ملف الضيف بنجاح.')),
                 );
@@ -196,7 +196,7 @@ class _GuestsScreenState extends ConsumerState<GuestsScreen> {
                       includeArchived: ref.read(guestIncludeArchivedProvider),
                     );
               } catch (e) {
-                if (!mounted) return;
+                if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('فشلت عملية الأرشفة: $e')),
                 );
@@ -359,15 +359,15 @@ class _GuestsScreenState extends ConsumerState<GuestsScreen> {
                   border: Border(bottom: BorderSide(color: Color(0xFFFDE68A), width: 1)),
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                child: Row(
+                child: const Row(
                   children: [
-                    const Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 20),
-                    const SizedBox(width: 12),
+                    Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 20),
+                    SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         'تنبيه تبعية هندسية: سياق الجلسة والحساب النشط مفقود. لإكمال دمج نظام النزلاء، يرجى تفعيل مصادر الهوية وسياق الجلسات الموحد.\n'
                         'Dependency Alert: Active Account / User Session context is unresolved. In production, guest ownership and immutable transaction logs derive from validated login states.',
-                        style: TextStyle(color: const Color(0xFF78350F), fontSize: 11, fontWeight: FontWeight.w500, height: 1.4),
+                        style: TextStyle(color: Color(0xFF78350F), fontSize: 11, fontWeight: FontWeight.w500, height: 1.4),
                       ),
                     ),
                   ],
@@ -381,9 +381,9 @@ class _GuestsScreenState extends ConsumerState<GuestsScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
+                  const Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
+                    children: [
                       Text(
                         'دليل إدارة النزلاء والضيوف | Guest Directory',
                         style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
@@ -545,7 +545,7 @@ class _GuestsScreenState extends ConsumerState<GuestsScreen> {
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
+                  children: [
                                           Text(
                                             g.fullName,
                                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
@@ -651,7 +651,7 @@ class _GuestsScreenState extends ConsumerState<GuestsScreen> {
 class GuestFormDialog extends ConsumerStatefulWidget {
   final Guest? guest;
 
-  const GuestFormDialog({Key? key, this.guest}) : super(key: key);
+  const GuestFormDialog({super.key, this.guest});
 
   @override
   ConsumerState<GuestFormDialog> createState() => _GuestFormDialogState();

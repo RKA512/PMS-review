@@ -1,132 +1,72 @@
 /// Why this file exists:
-/// Implementation of UnitRepository contract interfacing with sqflite.
+/// Implementation of UnitRepository contract.
+/// Delegates SQL to UnitLocalDataSource; focuses on domain mapping.
 /// Follows [Architecture Rule AR-302] and logs Unit audit updates.
 library;
 
-import '../../../../core/database/database_helper.dart';
 import '../../domain/entities/unit.dart';
 import '../../domain/entities/unit_type.dart';
 import '../../domain/repositories/unit_repository.dart';
+import '../datasources/unit_local_datasource.dart';
 import '../models/unit_model.dart';
 
 class UnitRepositoryImpl implements UnitRepository {
-  final _dbHelper = DatabaseHelper.instance;
+  final UnitLocalDataSource _dataSource;
+
+  UnitRepositoryImpl(this._dataSource);
 
   @override
   Future<List<Unit>> getUnits({required int propertyId, bool includeArchived = false}) async {
-    final db = await _dbHelper.executor;
-    final List<Map<String, dynamic>> maps;
-    if (includeArchived) {
-      maps = await db.query(
-        'units',
-        where: 'property_id = ?',
-        whereArgs: [propertyId],
-        orderBy: 'unit_number ASC',
-      );
-    } else {
-      maps = await db.query(
-        'units',
-        where: 'property_id = ? AND deleted_at IS NULL',
-        whereArgs: [propertyId],
-        orderBy: 'unit_number ASC',
-      );
-    }
+    final maps = await _dataSource.getUnits(propertyId, includeArchived);
     return maps.map((map) => UnitModel.fromMap(map)).toList();
   }
 
   @override
   Future<Unit?> getUnitById(int id) async {
-    final db = await _dbHelper.executor;
-    final maps = await db.query(
-      'units',
-      where: 'id = ?',
-      whereArgs: [id],
-      limit: 1,
-    );
-    if (maps.isEmpty) return null;
-    return UnitModel.fromMap(maps.first);
+    final map = await _dataSource.getUnitById(id);
+    if (map == null) return null;
+    return UnitModel.fromMap(map);
   }
 
   @override
   Future<Unit?> getUnitByUuid(String uuid) async {
-    final db = await _dbHelper.executor;
-    final maps = await db.query(
-      'units',
-      where: 'uuid = ?',
-      whereArgs: [uuid],
-      limit: 1,
-    );
-    if (maps.isEmpty) return null;
-    return UnitModel.fromMap(maps.first);
+    final map = await _dataSource.getUnitByUuid(uuid);
+    if (map == null) return null;
+    return UnitModel.fromMap(map);
   }
 
   @override
   Future<int> createUnit(Unit unit) async {
-    final db = await _dbHelper.executor;
-    final id = await db.insert('units', UnitModel.toMap(unit));
+    final id = await _dataSource.createUnit(UnitModel.toMap(unit));
     return id;
   }
 
   @override
   Future<void> updateUnit(Unit unit) async {
     if (unit.id == null) return;
-    final db = await _dbHelper.executor;
-
-    await db.update(
-      'units',
-      UnitModel.toMap(unit),
-      where: 'id = ?',
-      whereArgs: [unit.id],
-    );
+    await _dataSource.updateUnit(UnitModel.toMap(unit), unit.id!);
   }
 
   @override
   Future<void> archiveUnit(int id) async {
-    final db = await _dbHelper.executor;
     final nowString = DateTime.now().toIso8601String();
-
-    await db.update(
-      'units',
-      {
-        'deleted_at': nowString,
-        'updated_at': nowString,
-      },
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    await _dataSource.archiveUnit(id, nowString);
   }
 
   @override
   Future<void> unarchiveUnit(int id) async {
-    final db = await _dbHelper.executor;
     final nowString = DateTime.now().toIso8601String();
-
-    await db.update(
-      'units',
-      {
-        'deleted_at': null,
-        'updated_at': nowString,
-      },
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    await _dataSource.unarchiveUnit(id, nowString);
   }
 
   @override
   Future<void> updateUnitStatus({required int unitId, required String status}) async {
-    final db = await _dbHelper.executor;
-    await db.update(
-      'units',
-      {'status': status},
-      where: 'id = ?',
-      whereArgs: [unitId],
-    );
+    await _dataSource.updateUnitStatus(unitId, status);
   }
 
   @override
   Future<List<UnitType>> getUnitTypes() async {
-    final db = await _dbHelper.executor;
-    final maps = await db.query('unit_types', orderBy: 'name ASC');
+    final maps = await _dataSource.getUnitTypes();
     return maps.map((map) {
       return UnitType(
         id: map['id'] as int,

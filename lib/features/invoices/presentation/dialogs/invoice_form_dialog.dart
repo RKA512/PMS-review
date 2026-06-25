@@ -15,10 +15,10 @@ class CreateInvoiceDialogContent extends StatefulWidget {
   final Function(int bookingId, List<InvoiceLine> lines, List<InvoiceAdjustment> adjustments) onSave;
 
   const CreateInvoiceDialogContent({
-    Key? key,
+    super.key,
     required this.bookingMaps,
     required this.onSave,
-  }) : super(key: key);
+  });
 
   @override
   State<CreateInvoiceDialogContent> createState() => _CreateInvoiceDialogContentState();

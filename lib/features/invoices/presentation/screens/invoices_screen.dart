@@ -14,12 +14,12 @@ import '../../domain/entities/invoice.dart';
 import '../../domain/entities/invoice_adjustment.dart';
 import '../../domain/entities/invoice_line.dart';
 import '../providers/invoice_providers.dart';
-import '../widgets/invoice_form_dialog.dart';
-import '../widgets/invoice_details_dialog.dart';
+import '../dialogs/invoice_form_dialog.dart';
+import '../dialogs/invoice_details_dialog.dart';
 import '../widgets/invoice_list_table.dart';
 
 class InvoicesScreen extends ConsumerStatefulWidget {
-  const InvoicesScreen({Key? key}) : super(key: key);
+  const InvoicesScreen({super.key});
 
   @override
   ConsumerState<InvoicesScreen> createState() => _InvoicesScreenState();
@@ -46,12 +46,12 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
                 border: Border(bottom: BorderSide(color: Color(0xFFFDE68A), width: 1)),
               ),
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              child: Row(
+              child: const Row(
                 children: [
-                  const Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 20),
-                  const SizedBox(width: 12),
+                  Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 20),
+                  SizedBox(width: 12),
                   Expanded(
-                    child: const Text(
+                    child: Text(
                       'تنبيه: سياق المستخدم الموثق أو الحساب النشط غير متوفر حالياً لتفعيل الميزات السحابية.',
                       style: TextStyle(
                         fontSize: 13,
@@ -76,7 +76,7 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
               children: [
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                children: [
                     const Text(
                       'إدارة الفواتير والذمم المالية',
                       style: TextStyle(
@@ -137,7 +137,7 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
     final getUninvoiced = ref.read(getUninvoicedBookingsUseCaseProvider);
     final List<Map<String, dynamic>> bookingMaps = await getUninvoiced();
 
-    if (!mounted) return;
+    if (!context.mounted) return;
     
     if (bookingMaps.isEmpty) {
       showDialog(

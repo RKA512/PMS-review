@@ -18,42 +18,42 @@ abstract class Failure {
 
 class ValidationFailure extends Failure {
   const ValidationFailure({
-    required String code,
-    required String message,
-  }) : super(code: code, message: message);
+    required super.code,
+    required super.message,
+  });
 }
 
 class AuthorizationFailure extends Failure {
   const AuthorizationFailure({
-    required String code,
-    required String message,
-  }) : super(code: code, message: message);
+    required super.code,
+    required super.message,
+  });
 }
 
 class BusinessRuleFailure extends Failure {
   const BusinessRuleFailure({
-    required String code,
-    required String message,
-  }) : super(code: code, message: message);
+    required super.code,
+    required super.message,
+  });
 }
 
 class FinancialFailure extends Failure {
   const FinancialFailure({
-    required String code,
-    required String message,
-  }) : super(code: code, message: message);
+    required super.code,
+    required super.message,
+  });
 }
 
 class DatabaseFailure extends Failure {
   const DatabaseFailure({
-    required String code,
-    required String message,
-  }) : super(code: code, message: message);
+    required super.code,
+    required super.message,
+  });
 }
 
 class SystemFailure extends Failure {
   const SystemFailure({
-    required String code,
-    required String message,
-  }) : super(code: code, message: message);
+    required super.code,
+    required super.message,
+  });
 }

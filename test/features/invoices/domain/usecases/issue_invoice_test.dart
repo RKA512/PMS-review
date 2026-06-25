@@ -149,7 +149,7 @@ void main() {
 
     expect(
       () => useCase(1, 1),
-      throwsA(isA<BusinessRuleFailure>().having((f) => f.code, 'code', 'INVOICE_NOT_DRAFT')),
+      throwsA(isA<FinancialFailure>().having((f) => f.code, 'code', 'INVOICE_NOT_DRAFT')),
     );
   });
 
@@ -159,7 +159,7 @@ void main() {
 
     expect(
       () => useCase(1, 1),
-      throwsA(isA<BusinessRuleFailure>().having((f) => f.code, 'code', 'EMPTY_INVOICE')),
+      throwsA(isA<FinancialFailure>().having((f) => f.code, 'code', 'EMPTY_INVOICE')),
     );
   });
 

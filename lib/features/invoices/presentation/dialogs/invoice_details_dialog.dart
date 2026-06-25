@@ -13,17 +13,17 @@ import '../../domain/entities/invoice.dart';
 import '../../domain/entities/invoice_adjustment.dart';
 import '../../domain/entities/invoice_line.dart';
 import '../providers/invoice_providers.dart';
-import 'invoice_status_badge.dart';
+import '../widgets/invoice_status_badge.dart';
 
 class InvoiceDetailsDialogContent extends ConsumerStatefulWidget {
   final int invoiceId;
   final VoidCallback onUpdate;
 
   const InvoiceDetailsDialogContent({
-    Key? key,
+    super.key,
     required this.invoiceId,
     required this.onUpdate,
-  }) : super(key: key);
+  });
 
   @override
   ConsumerState<InvoiceDetailsDialogContent> createState() => _InvoiceDetailsDialogContentState();
@@ -82,8 +82,10 @@ class _InvoiceDetailsDialogContentState extends ConsumerState<InvoiceDetailsDial
       final updateUseCase = ref.read(updateInvoiceUseCaseProvider);
       await updateUseCase(updated, authenticatedUserId);
       widget.onUpdate();
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تحديث الفاتورة والتوطين بنجاح!')));
     } catch (e) {
+      if (!mounted) return;
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -140,9 +142,11 @@ class _InvoiceDetailsDialogContentState extends ConsumerState<InvoiceDetailsDial
         final issueUseCase = ref.read(issueInvoiceUseCaseProvider);
         await issueUseCase(invoice.id!, authenticatedUserId);
         widget.onUpdate();
+        if (!mounted) return;
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إصدار الفاتورة بنجاح وتجميد المبالغ ماليّاً!')));
       } catch (e) {
+        if (!mounted) return;
         showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
@@ -198,9 +202,11 @@ class _InvoiceDetailsDialogContentState extends ConsumerState<InvoiceDetailsDial
         final cancelUseCase = ref.read(cancelInvoiceUseCaseProvider);
         await cancelUseCase(invoice.id!, authenticatedUserId);
         widget.onUpdate();
+        if (!mounted) return;
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إلغاء الفاتورة بنجاح!')));
       } catch (e) {
+        if (!mounted) return;
         showDialog(
           context: context,
           builder: (ctx) => AlertDialog(

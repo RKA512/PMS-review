@@ -187,12 +187,12 @@ void main() {
     final invoice = createDraftInvoice(id: 1);
     repository.invoices[1] = invoice;
 
-    final line = InvoiceLine(
+    const line = InvoiceLine(
       invoiceId: 1,
       description: 'Room Charge',
       quantity: 0,
-      unitPrice: const Money(100),
-      lineTotal: const Money(0),
+      unitPrice: Money(100),
+      lineTotal: Money(0),
     );
 
     expect(
@@ -205,12 +205,12 @@ void main() {
     final invoice = createDraftInvoice(id: 1);
     repository.invoices[1] = invoice;
 
-    final line = InvoiceLine(
+    const line = InvoiceLine(
       invoiceId: 1,
       description: 'Room Charge',
       quantity: 1,
-      unitPrice: const Money(-100),
-      lineTotal: const Money(-100),
+      unitPrice: Money(-100),
+      lineTotal: Money(-100),
     );
 
     expect(

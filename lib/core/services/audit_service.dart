@@ -19,6 +19,7 @@ class AuditService implements AuditLogger {
 
   /// Log a system event securely.
   /// Implements AP-100.
+  @override
   Future<int> log({
     int? propertyId,
     required int userId,

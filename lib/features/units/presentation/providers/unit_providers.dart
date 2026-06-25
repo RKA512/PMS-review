@@ -5,11 +5,13 @@
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/database/database_helper.dart';
 import '../../../../core/services/audit_service.dart';
 import '../../domain/entities/unit.dart';
 import '../../domain/entities/unit_type.dart';
 import '../../domain/repositories/unit_repository.dart';
 import '../../data/repositories/unit_repository_impl.dart';
+import '../../data/datasources/unit_local_datasource_impl.dart';
 import '../../domain/usecases/get_units.dart';
 import '../../domain/usecases/create_unit.dart';
 import '../../domain/usecases/update_unit.dart';
@@ -17,9 +19,14 @@ import '../../domain/usecases/archive_unit.dart';
 import '../../domain/usecases/unarchive_unit.dart';
 import '../../domain/usecases/get_unit_types.dart';
 
+// Data Source
+final unitLocalDataSourceProvider = Provider((ref) {
+  return UnitLocalDataSourceImpl(DatabaseHelper.instance);
+});
+
 // Repository Provider
 final unitRepositoryProvider = Provider<UnitRepository>((ref) {
-  return UnitRepositoryImpl();
+  return UnitRepositoryImpl(ref.watch(unitLocalDataSourceProvider));
 });
 
 // Use Case Providers

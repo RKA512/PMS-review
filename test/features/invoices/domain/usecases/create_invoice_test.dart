@@ -151,7 +151,7 @@ void main() {
     final invoice = createTemplateInvoice(bookingId: 10);
     expect(
       () => useCase(invoice, 1),
-      throwsA(isA<BusinessRuleFailure>().having((f) => f.code, 'code', 'DUPLICATE_BOOKING_INVOICE')),
+      throwsA(isA<FinancialFailure>().having((f) => f.code, 'code', 'DUPLICATE_BOOKING_INVOICE')),
     );
   });
 
@@ -165,11 +165,11 @@ void main() {
 
   test('should throw ValidationFailure if any line quantity is <= 0', () async {
     final lines = [
-      InvoiceLine(
+      const InvoiceLine(
         description: 'Room Charge',
         quantity: 0,
-        unitPrice: const Money(100),
-        lineTotal: const Money(0),
+        unitPrice: Money(100),
+        lineTotal: Money(0),
       ),
     ];
     final invoice = createTemplateInvoice(bookingId: 10, lines: lines);
@@ -181,11 +181,11 @@ void main() {
 
   test('should throw ValidationFailure if any line unitPrice is negative', () async {
     final lines = [
-      InvoiceLine(
+      const InvoiceLine(
         description: 'Room Charge',
         quantity: 1,
-        unitPrice: const Money(-100),
-        lineTotal: const Money(-100),
+        unitPrice: Money(-100),
+        lineTotal: Money(-100),
       ),
     ];
     final invoice = createTemplateInvoice(bookingId: 10, lines: lines);

@@ -15,6 +15,7 @@ import '../../../guests/domain/entities/guest.dart';
 import '../../../units/domain/entities/unit.dart';
 import '../../domain/repositories/booking_repository.dart';
 import '../../data/repositories/booking_repository_impl.dart';
+import '../../data/datasources/booking_local_datasource_impl.dart';
 import '../../domain/services/booking_domain_service.dart';
 import '../../domain/usecases/create_booking.dart';
 import '../../domain/usecases/edit_booking.dart';
@@ -27,9 +28,14 @@ import '../../../invoices/domain/entities/invoice.dart';
 import '../../../invoices/presentation/providers/invoice_providers.dart';
 import '../../domain/entities/booking.dart';
 
+// Data Sources
+final bookingLocalDataSourceProvider = Provider((ref) {
+  return BookingLocalDataSourceImpl(DatabaseHelper.instance);
+});
+
 // Repository Provider
 final bookingRepositoryProvider = Provider<BookingRepository>((ref) {
-  return BookingRepositoryImpl(DatabaseHelper.instance);
+  return BookingRepositoryImpl(ref.watch(bookingLocalDataSourceProvider));
 });
 
 // Domain Service Provider

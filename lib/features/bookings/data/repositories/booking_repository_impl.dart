@@ -1,40 +1,36 @@
 /// Why the file exists:
 /// SQLite implementation of the BookingRepository interface.
 /// Implements [AR-302 (Repository Implementation inside data/repositories)] and database actions in [Flow 04].
-/// Ensures transactional integrity using sqflite's transaction runner block for atomic multi-inserts.
+/// Delegates raw SQL to BookingLocalDataSource; focuses on domain mapping.
 library;
 
 import 'dart:async';
 import '../../../../core/common/enums/booking_status.dart';
-import '../../../../core/database/database_helper.dart';
 import '../../domain/entities/booking.dart';
 import '../../domain/repositories/booking_repository.dart';
+import '../datasources/booking_local_datasource.dart';
 
 class BookingRepositoryImpl implements BookingRepository {
-  final DatabaseHelper _dbHelper;
+  final BookingLocalDataSource _dataSource;
 
-  BookingRepositoryImpl(this._dbHelper);
+  BookingRepositoryImpl(this._dataSource);
 
   @override
   Future<int> insertBookingRow(Booking booking) async {
-    final db = await _dbHelper.executor;
-    return await db.insert(
-      'bookings',
-      {
-        'uuid': booking.uuid,
-        'property_id': booking.propertyId,
-        'primary_guest_id': booking.primaryGuestId,
-        'booking_number': booking.bookingNumber,
-        'status': booking.status.toJson(),
-        'check_in_date': booking.checkInDate.toIso8601String(),
-        'check_out_date': booking.checkOutDate.toIso8601String(),
-        'source': booking.source,
-        'notes': booking.notes,
-        'created_by': booking.createdBy,
-        'created_at': booking.createdAt.toIso8601String(),
-        'updated_at': booking.updatedAt.toIso8601String(),
-      },
-    );
+    return await _dataSource.insertBookingRow({
+      'uuid': booking.uuid,
+      'property_id': booking.propertyId,
+      'primary_guest_id': booking.primaryGuestId,
+      'booking_number': booking.bookingNumber,
+      'status': booking.status.toJson(),
+      'check_in_date': booking.checkInDate.toIso8601String(),
+      'check_out_date': booking.checkOutDate.toIso8601String(),
+      'source': booking.source,
+      'notes': booking.notes,
+      'created_by': booking.createdBy,
+      'created_at': booking.createdAt.toIso8601String(),
+      'updated_at': booking.updatedAt.toIso8601String(),
+    });
   }
 
   @override
@@ -45,20 +41,16 @@ class BookingRepositoryImpl implements BookingRepository {
     required DateTime endDate,
     required String uuid,
   }) async {
-    final db = await _dbHelper.executor;
-    await db.insert(
-      'booking_units',
-      {
-        'uuid': uuid,
-        'booking_id': bookingId,
-        'unit_id': unitId,
-        'start_date': startDate.toIso8601String(),
-        'end_date': endDate.toIso8601String(),
-        'nightly_rate': 0,
-        'created_at': DateTime.now().toIso8601String(),
-        'updated_at': DateTime.now().toIso8601String(),
-      },
-    );
+    await _dataSource.insertBookingUnit({
+      'uuid': uuid,
+      'booking_id': bookingId,
+      'unit_id': unitId,
+      'start_date': startDate.toIso8601String(),
+      'end_date': endDate.toIso8601String(),
+      'nightly_rate': 0,
+      'created_at': DateTime.now().toIso8601String(),
+      'updated_at': DateTime.now().toIso8601String(),
+    });
   }
 
   @override
@@ -66,71 +58,42 @@ class BookingRepositoryImpl implements BookingRepository {
     required int bookingId,
     required int guestId,
   }) async {
-    final db = await _dbHelper.executor;
-    await db.insert(
-      'booking_guests',
-      {
-        'booking_id': bookingId,
-        'guest_id': guestId,
-        'created_at': DateTime.now().toIso8601String(),
-      },
-    );
+    await _dataSource.insertBookingGuest({
+      'booking_id': bookingId,
+      'guest_id': guestId,
+      'created_at': DateTime.now().toIso8601String(),
+    });
   }
 
   @override
   Future<void> updateBooking(Booking booking) async {
-    final db = await _dbHelper.executor;
-    await db.update(
-      'bookings',
-      {
-        'notes': booking.notes,
-        'source': booking.source,
-        'check_in_date': booking.checkInDate.toIso8601String(),
-        'check_out_date': booking.checkOutDate.toIso8601String(),
-        'updated_at': booking.updatedAt.toIso8601String(),
-      },
-      where: 'id = ?',
-      whereArgs: [booking.id],
-    );
+    await _dataSource.updateBooking({
+      'notes': booking.notes,
+      'source': booking.source,
+      'check_in_date': booking.checkInDate.toIso8601String(),
+      'check_out_date': booking.checkOutDate.toIso8601String(),
+      'updated_at': booking.updatedAt.toIso8601String(),
+    }, booking.id!);
   }
 
   @override
   Future<Booking?> getBookingById(int id) async {
-    final db = await _dbHelper.executor;
-    final results = await db.query(
-      'bookings',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-
-    if (results.isEmpty) return null;
-    return _mapToBooking(results.first);
+    final row = await _dataSource.getBookingById(id);
+    if (row == null) return null;
+    return _mapToBooking(row);
   }
 
   @override
   Future<Booking?> getBookingByNumber(String bookingNumber) async {
-    final db = await _dbHelper.executor;
-    final results = await db.query(
-      'bookings',
-      where: 'booking_number = ?',
-      whereArgs: [bookingNumber],
-    );
-
-    if (results.isEmpty) return null;
-    return _mapToBooking(results.first);
+    final row = await _dataSource.getBookingByNumber(bookingNumber);
+    if (row == null) return null;
+    return _mapToBooking(row);
   }
 
   @override
   Future<List<Booking>> getBookingsForProperty(int propertyId) async {
-    final db = await _dbHelper.executor;
-    final results = await db.query(
-      'bookings',
-      where: 'property_id = ?',
-      whereArgs: [propertyId],
-      orderBy: 'check_in_date DESC',
-    );
-
-    return results.map(_mapToBooking).toList();
+    final rows = await _dataSource.getBookingsForProperty(propertyId);
+    return rows.map(_mapToBooking).toList();
   }
 
   @override
@@ -140,36 +103,9 @@ class BookingRepositoryImpl implements BookingRepository {
     required DateTime end,
     int? excludeBookingId,
   }) async {
-    final db = await _dbHelper.executor;
-    
-    // Dates mapped as ISO8601 string
     final startStr = start.toIso8601String();
     final endStr = end.toIso8601String();
-
-    final List<Object?> whereArgs = [unitId];
-    String excludeClause = '';
-    if (excludeBookingId != null) {
-      excludeClause = 'AND b.id != ?';
-      whereArgs.add(excludeBookingId);
-    }
-    whereArgs.addAll([startStr, endStr]);
-
-    // Find overlapping records in booking_units and active bookings
-    final query = '''
-      SELECT COUNT(*) as count 
-      FROM booking_units bu
-      JOIN bookings b ON bu.booking_id = b.id
-      WHERE bu.unit_id = ? 
-        AND b.status NOT IN ('cancelled', 'checkedOut')
-        $excludeClause
-        AND (
-          (bu.start_date < ? AND bu.end_date > ?)
-        )
-    ''';
-    
-    final result = await db.rawQuery(query, whereArgs);
-    final count = result.first['count'] as int? ?? 0;
-    return count == 0;
+    return await _dataSource.isUnitAvailable(unitId, startStr, endStr, excludeBookingId);
   }
 
   @override
@@ -178,40 +114,17 @@ class BookingRepositoryImpl implements BookingRepository {
     required String status,
     required int updatedByUserId,
   }) async {
-    final db = await _dbHelper.executor;
-    await db.update(
-      'bookings',
-      {
-        'status': status,
-        'updated_at': DateTime.now().toIso8601String(),
-      },
-      where: 'id = ?',
-      whereArgs: [bookingId],
-    );
+    await _dataSource.updateBookingStatus(bookingId, status);
   }
 
   @override
   Future<List<int>> getUnitIdsForBooking(int bookingId) async {
-    final db = await _dbHelper.executor;
-    final results = await db.query(
-      'booking_units',
-      columns: ['unit_id'],
-      where: 'booking_id = ?',
-      whereArgs: [bookingId],
-    );
-    return results.map((row) => row['unit_id'] as int).toList();
+    return await _dataSource.getUnitIdsForBooking(bookingId);
   }
 
   @override
   Future<List<int>> getGuestIdsForBooking(int bookingId) async {
-    final db = await _dbHelper.executor;
-    final results = await db.query(
-      'booking_guests',
-      columns: ['guest_id'],
-      where: 'booking_id = ?',
-      whereArgs: [bookingId],
-    );
-    return results.map((row) => row['guest_id'] as int).toList();
+    return await _dataSource.getGuestIdsForBooking(bookingId);
   }
 
   Booking _mapToBooking(Map<String, dynamic> row) {

@@ -5,12 +5,14 @@
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/database/database_helper.dart';
 import '../../../../core/services/audit_service.dart';
 import '../../domain/entities/property.dart';
 import '../../domain/entities/property_type.dart';
 import '../../domain/entities/property_settings.dart';
 import '../../domain/repositories/property_repository.dart';
 import '../../data/repositories/property_repository_impl.dart';
+import '../../data/datasources/property_local_datasource_impl.dart';
 import '../../domain/usecases/get_properties.dart';
 import '../../domain/usecases/create_property.dart';
 import '../../domain/usecases/update_property.dart';
@@ -19,9 +21,14 @@ import '../../domain/usecases/unarchive_property.dart';
 import '../../domain/usecases/get_property_types.dart';
 import '../../domain/usecases/property_settings_usecases.dart';
 
+// Data Source
+final propertyLocalDataSourceProvider = Provider((ref) {
+  return PropertyLocalDataSourceImpl(DatabaseHelper.instance);
+});
+
 // Repository Provider
 final propertyRepositoryProvider = Provider<PropertyRepository>((ref) {
-  return PropertyRepositoryImpl();
+  return PropertyRepositoryImpl(ref.watch(propertyLocalDataSourceProvider));
 });
 
 // Use Case Providers

@@ -143,7 +143,7 @@ void main() {
 
     expect(
       () => useCase(1, 1),
-      throwsA(isA<BusinessRuleFailure>().having((f) => f.code, 'code', 'CANCEL_PAID_REJECTED')),
+      throwsA(isA<FinancialFailure>().having((f) => f.code, 'code', 'CANCEL_PAID_REJECTED')),
     );
   });
 

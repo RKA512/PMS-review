@@ -7,14 +7,14 @@ import '../../../../core/common/models/money.dart';
 
 enum InvoiceAdjustmentType {
   discount,
-  manual_adjustment,
+  manualAdjustment,
   correction;
 
   String get displayName {
     switch (this) {
       case InvoiceAdjustmentType.discount:
         return 'خصم (Discount)';
-      case InvoiceAdjustmentType.manual_adjustment:
+      case InvoiceAdjustmentType.manualAdjustment:
         return 'تعديل يدوي (Manual Adjustment)';
       case InvoiceAdjustmentType.correction:
         return 'تصحيح (Correction)';
@@ -23,8 +23,8 @@ enum InvoiceAdjustmentType {
 
   static InvoiceAdjustmentType fromString(String value) {
     return InvoiceAdjustmentType.values.firstWhere(
-      (e) => e.name == value || e.name.replaceAll('_', '') == value.replaceAll('_', ''),
-      orElse: () => InvoiceAdjustmentType.manual_adjustment,
+      (e) => e.name.replaceAll('_', '').toLowerCase() == value.replaceAll('_', '').toLowerCase(),
+      orElse: () => InvoiceAdjustmentType.manualAdjustment,
     );
   }
 }

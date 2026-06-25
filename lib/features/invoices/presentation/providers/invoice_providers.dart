@@ -5,6 +5,7 @@ library;
 
 import 'dart:async';
 import '../../../../core/common/models/money.dart';
+import '../../../../core/database/database_helper.dart';
 import '../../../../core/providers/session_providers.dart';
 import '../../../../core/services/audit_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +14,7 @@ import '../../domain/repositories/invoice_repository.dart';
 import '../../../../core/contracts/payment_balance_reader.dart';
 import '../../../../core/database/sqlite_payment_balance_reader.dart';
 import '../../data/repositories/invoice_repository_impl.dart';
+import '../../data/datasources/invoice_local_datasource_impl.dart';
 import '../../domain/usecases/create_invoice.dart';
 import '../../domain/usecases/update_invoice.dart';
 import '../../domain/usecases/add_invoice_line.dart';
@@ -31,9 +33,14 @@ final paymentBalanceReaderProvider = Provider<PaymentBalanceReader>((ref) {
   return SqlitePaymentBalanceReader();
 });
 
+// Data Source
+final invoiceLocalDataSourceProvider = Provider((ref) {
+  return InvoiceLocalDataSourceImpl(DatabaseHelper.instance);
+});
+
 // Repository Provider
 final invoiceRepositoryProvider = Provider<InvoiceRepository>((ref) {
-  return InvoiceRepositoryImpl();
+  return InvoiceRepositoryImpl(ref.watch(invoiceLocalDataSourceProvider));
 });
 
 // Use Case Providers

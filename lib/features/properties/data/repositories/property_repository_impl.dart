@@ -1,120 +1,77 @@
 /// Why this file exists:
 /// Implementation of PropertyRepository contract.
-/// Standard SQLite interactions using the database helper.
+/// Delegates SQL to PropertyLocalDataSource; focuses on domain mapping.
 /// Triggers AP-1000 Property Audit Rules on changes.
 library;
 
 import '../../../../core/common/enums/property_status.dart';
-import '../../../../core/database/database_helper.dart';
 import '../../domain/entities/property.dart';
 import '../../domain/entities/property_type.dart';
 import '../../domain/entities/property_settings.dart';
 import '../../domain/repositories/property_repository.dart';
+import '../datasources/property_local_datasource.dart';
 import '../models/property_model.dart';
 
 class PropertyRepositoryImpl implements PropertyRepository {
-  final _dbHelper = DatabaseHelper.instance;
+  final PropertyLocalDataSource _dataSource;
+
+  PropertyRepositoryImpl(this._dataSource);
 
   @override
   Future<List<Property>> getProperties({bool includeArchived = false}) async {
-    final db = await _dbHelper.database;
-    final List<Map<String, dynamic>> maps;
-    if (includeArchived) {
-      maps = await db.query('properties', orderBy: 'name ASC');
-    } else {
-      maps = await db.query(
-        'properties',
-        where: 'deleted_at IS NULL',
-        orderBy: 'name ASC',
-      );
-    }
+    final maps = await _dataSource.getProperties(includeArchived);
     return maps.map((map) => PropertyModel.fromMap(map)).toList();
   }
 
   @override
   Future<Property?> getPropertyById(int id) async {
-    final db = await _dbHelper.database;
-    final maps = await db.query(
-      'properties',
-      where: 'id = ?',
-      whereArgs: [id],
-      limit: 1,
-    );
-    if (maps.isEmpty) return null;
-    return PropertyModel.fromMap(maps.first);
+    final map = await _dataSource.getPropertyById(id);
+    if (map == null) return null;
+    return PropertyModel.fromMap(map);
   }
 
   @override
   Future<Property?> getPropertyByUuid(String uuid) async {
-    final db = await _dbHelper.database;
-    final maps = await db.query(
-      'properties',
-      where: 'uuid = ?',
-      whereArgs: [uuid],
-      limit: 1,
-    );
-    if (maps.isEmpty) return null;
-    return PropertyModel.fromMap(maps.first);
+    final map = await _dataSource.getPropertyByUuid(uuid);
+    if (map == null) return null;
+    return PropertyModel.fromMap(map);
   }
 
   @override
   Future<int> createProperty(Property property) async {
-    final db = await _dbHelper.database;
-    final id = await db.insert('properties', PropertyModel.toMap(property));
+    final id = await _dataSource.createProperty(PropertyModel.toMap(property));
     return id;
   }
 
   @override
   Future<void> updateProperty(Property property) async {
     if (property.id == null) return;
-    final db = await _dbHelper.database;
-    
-    await db.update(
-      'properties',
-      PropertyModel.toMap(property),
-      where: 'id = ?',
-      whereArgs: [property.id],
-    );
+    await _dataSource.updateProperty(PropertyModel.toMap(property), property.id!);
   }
 
   @override
   Future<void> archiveProperty(int id) async {
-    final db = await _dbHelper.database;
     final nowString = DateTime.now().toIso8601String();
-    
-    await db.update(
-      'properties',
-      {
-        'deleted_at': nowString,
-        'status': PropertyStatus.archived.toJson(),
-        'updated_at': nowString,
-      },
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    await _dataSource.archiveProperty(id, {
+      'deleted_at': nowString,
+      'status': PropertyStatus.archived.toJson(),
+      'updated_at': nowString,
+    });
   }
 
   @override
   Future<void> unarchiveProperty(int id) async {
-    final db = await _dbHelper.database;
     final nowString = DateTime.now().toIso8601String();
-    
-    await db.update(
-      'properties',
-      {
-        'deleted_at': null,
-        'status': PropertyStatus.active.toJson(),
-        'updated_at': nowString,
-      },
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    await _dataSource.unarchiveProperty(id, {
+      'deleted_at': null,
+      'status': PropertyStatus.active.toJson(),
+      'updated_at': nowString,
+    });
   }
 
   @override
   Future<List<PropertyType>> getPropertyTypes() async {
-    final db = await _dbHelper.database;
-    final maps = await db.query('property_types', orderBy: 'name ASC');
+    final maps = await _dataSource.getPropertyTypes();
     return maps.map((map) {
       return PropertyType(
         id: map['id'] as int,
@@ -126,12 +83,7 @@ class PropertyRepositoryImpl implements PropertyRepository {
 
   @override
   Future<List<PropertySettings>> getPropertySettings(int propertyId) async {
-    final db = await _dbHelper.database;
-    final maps = await db.query(
-      'property_settings',
-      where: 'property_id = ?',
-      whereArgs: [propertyId],
-    );
+    final maps = await _dataSource.getPropertySettings(propertyId);
     return maps.map((map) {
       return PropertySettings(
         id: map['id'] as int?,
@@ -146,18 +98,10 @@ class PropertyRepositoryImpl implements PropertyRepository {
 
   @override
   Future<void> savePropertySetting(int propertyId, String key, String value) async {
-    final db = await _dbHelper.database;
     final nowString = DateTime.now().toIso8601String();
-
-    final existing = await db.query(
-      'property_settings',
-      where: 'property_id = ? AND setting_key = ?',
-      whereArgs: [propertyId, key],
-      limit: 1,
-    );
-
+    final existing = await _dataSource.getPropertySettingByKey(propertyId, key);
     if (existing.isEmpty) {
-      await db.insert('property_settings', {
+      await _dataSource.insertPropertySetting({
         'property_id': propertyId,
         'setting_key': key,
         'setting_value': value,
@@ -165,28 +109,13 @@ class PropertyRepositoryImpl implements PropertyRepository {
         'updated_at': nowString,
       });
     } else {
-      await db.update(
-        'property_settings',
-        {
-          'setting_value': value,
-          'updated_at': nowString,
-        },
-        where: 'property_id = ? AND setting_key = ?',
-        whereArgs: [propertyId, key],
-      );
+      await _dataSource.updatePropertySetting(value, nowString, propertyId, key);
     }
   }
 
   @override
   Future<String?> getPropertySettingValue(int propertyId, String key) async {
-    final db = await _dbHelper.database;
-    final result = await db.query(
-      'property_settings',
-      columns: ['setting_value'],
-      where: 'property_id = ? AND setting_key = ?',
-      whereArgs: [propertyId, key],
-      limit: 1,
-    );
+    final result = await _dataSource.getPropertySettingByKey(propertyId, key);
     if (result.isEmpty) return null;
     return result.first['setting_value'] as String?;
   }

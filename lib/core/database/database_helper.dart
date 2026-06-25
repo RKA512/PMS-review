@@ -36,15 +36,32 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _createDB,
+      onUpgrade: _upgradeDB,
       onConfigure: _onConfigure,
     );
   }
 
   Future<void> _onConfigure(Database db) async {
-    // Implements DB-005
     await db.execute('PRAGMA foreign_keys = ON;');
+  }
+
+  Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await _migrateV1toV2(db);
+    }
+  }
+
+  Future<void> _migrateV1toV2(Database db) async {
+    final tables = await db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='booking_notes'");
+    if (tables.isNotEmpty) {
+      final cols = await db.rawQuery("PRAGMA table_info(booking_notes)");
+      final hasUpdatedAt = cols.any((c) => c['name'] == 'updated_at');
+      if (!hasUpdatedAt) {
+        await db.execute("ALTER TABLE booking_notes ADD COLUMN updated_at TEXT NOT NULL DEFAULT (datetime('now'))");
+      }
+    }
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -361,6 +378,7 @@ class DatabaseHelper {
         note TEXT NOT NULL,
         created_by INTEGER NOT NULL,
         created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
         FOREIGN KEY (booking_id) REFERENCES bookings (id) ON DELETE CASCADE,
         FOREIGN KEY (created_by) REFERENCES users (id)
       )
@@ -732,6 +750,163 @@ class DatabaseHelper {
           ('Guest House', 'Boutique hospitality and home stay buildings')
       ''');
     }
+  }
+
+  Future<int> getActiveUnitsCount(int propertyId) async {
+    final db = await instance.database;
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM units WHERE property_id = ? AND status = \'Active\'',
+      [propertyId],
+    );
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  Future<int> getActiveBookingsCount(int propertyId) async {
+    final db = await instance.database;
+    final result = await db.rawQuery(
+      "SELECT COUNT(*) as count FROM bookings WHERE property_id = ? AND status NOT IN ('checkedOut', 'cancelled')",
+      [propertyId],
+    );
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  Future<int> getAuditLogsCount(int propertyId) async {
+    final db = await instance.database;
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM audit_logs WHERE property_id = ?',
+      [propertyId],
+    );
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  // --- Reports Aggregates ---
+  Future<Map<String, dynamic>> getFinancialSummary(int propertyId,
+      {DateTime? from, DateTime? to}) async {
+    final db = await instance.database;
+    final dateFilter = from != null && to != null
+        ? "AND created_at BETWEEN '${from.toIso8601String()}' AND '${to.toIso8601String()}'"
+        : '';
+    final revenue = Sqflite.firstIntValue(await db.rawQuery(
+      "SELECT COALESCE(SUM(amount),0) FROM payments WHERE property_id = ? AND payment_type = 'incoming' $dateFilter",
+      [propertyId]));
+    final expenses = Sqflite.firstIntValue(await db.rawQuery(
+      "SELECT COALESCE(SUM(amount),0) FROM expenses WHERE property_id = ? AND deleted_at IS NULL $dateFilter",
+      [propertyId]));
+    final refunds = Sqflite.firstIntValue(await db.rawQuery(
+      "SELECT COALESCE(SUM(amount),0) FROM payments WHERE property_id = ? AND payment_type = 'refund' $dateFilter",
+      [propertyId]));
+    final bookingCount = Sqflite.firstIntValue(await db.rawQuery(
+      "SELECT COUNT(*) FROM bookings WHERE property_id = ? $dateFilter", [propertyId]));
+    final occupancy = Sqflite.firstIntValue(await db.rawQuery(
+      "SELECT COUNT(*) FROM booking_units bu JOIN bookings b ON bu.booking_id = b.id WHERE b.property_id = ? AND b.status NOT IN ('cancelled','checkedOut') $dateFilter",
+      [propertyId]));
+    return {
+      'revenue': revenue ?? 0,
+      'expenses': expenses ?? 0,
+      'refunds': refunds ?? 0,
+      'bookingCount': bookingCount ?? 0,
+      'occupiedUnits': occupancy ?? 0,
+    };
+  }
+
+  Future<List<Map<String, dynamic>>> getMonthlyRevenue(int propertyId, {int months = 12}) async {
+    final db = await instance.database;
+    return await db.rawQuery(
+      "SELECT strftime('%Y-%m', created_at) as month, SUM(amount) as total FROM payments "
+      "WHERE property_id = ? AND payment_type = 'incoming' AND created_at >= date('now', '-$months months') "
+      "GROUP BY month ORDER BY month ASC",
+      [propertyId]);
+  }
+
+  // --- App Settings ---
+  Future<String?> getAppSetting(String key) async {
+    final db = await instance.database;
+    final result = await db.query('app_settings', where: 'setting_key = ?', whereArgs: [key]);
+    if (result.isEmpty) return null;
+    return result.first['setting_value'] as String?;
+  }
+
+  Future<void> setAppSetting(String key, String value) async {
+    final db = await instance.database;
+    final now = DateTime.now().toIso8601String();
+    final existing = await db.query('app_settings', where: 'setting_key = ?', whereArgs: [key]);
+    if (existing.isEmpty) {
+      await db.insert('app_settings', {
+        'setting_key': key,
+        'setting_value': value,
+        'created_at': now,
+        'updated_at': now,
+      });
+    } else {
+      await db.update('app_settings', {'setting_value': value, 'updated_at': now},
+          where: 'setting_key = ?', whereArgs: [key]);
+    }
+  }
+
+  // --- User Management ---
+  Future<List<Map<String, dynamic>>> getAllUsers() async {
+    final db = await instance.database;
+    return await db.rawQuery(
+      'SELECT u.*, r.name as role_name FROM users u LEFT JOIN roles r ON u.role_id = r.id WHERE u.deleted_at IS NULL ORDER BY u.id');
+  }
+
+  Future<int> createUser(Map<String, dynamic> userMap) async {
+    final db = await instance.database;
+    return await db.insert('users', userMap);
+  }
+
+  Future<void> updateUser(int id, Map<String, dynamic> userMap) async {
+    final db = await instance.database;
+    await db.update('users', userMap, where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> deleteUser(int id) async {
+    final db = await instance.database;
+    final now = DateTime.now().toIso8601String();
+    await db.update('users', {'deleted_at': now}, where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<Map<String, dynamic>?> getUserById(int id) async {
+    final db = await instance.database;
+    final result = await db.query('users', where: 'id = ?', whereArgs: [id]);
+    return result.isNotEmpty ? result.first : null;
+  }
+
+  Future<bool> verifyPassword(int userId, String password) async {
+    final db = await instance.database;
+    final result = await db.query('users',
+        columns: ['password_hash'], where: 'id = ?', whereArgs: [userId]);
+    if (result.isEmpty) return false;
+    return result.first['password_hash'] == password;
+  }
+
+  Future<void> updatePassword(int userId, String newHash) async {
+    final db = await instance.database;
+    final now = DateTime.now().toIso8601String();
+    await db.update('users', {'password_hash': newHash, 'updated_at': now},
+        where: 'id = ?', whereArgs: [userId]);
+  }
+
+  // --- Factory Reset ---
+  Future<void> factoryReset() async {
+    final db = await instance.database;
+    await db.execute('PRAGMA foreign_keys = OFF');
+    final tables = [
+      'sync_queue', 'app_settings', 'currency_rates', 'currencies',
+      'audit_logs', 'notifications', 'business_day_transactions', 'business_days',
+      'expenses', 'expense_categories', 'settlement_corrections', 'settlements',
+      'payments', 'invoice_adjustments', 'invoice_lines', 'invoices',
+      'booking_notes', 'booking_unit_transfers', 'booking_units', 'booking_guests',
+      'bookings', 'guest_credit_transactions', 'guest_credit_accounts',
+      'guest_contacts', 'guests', 'user_property_access', 'property_settings',
+      'units', 'unit_types', 'users', 'role_permissions', 'permissions',
+      'roles', 'properties', 'property_types', 'accounts',
+    ];
+    for (final table in tables) {
+      await db.delete(table);
+    }
+    await db.execute('PRAGMA foreign_keys = ON');
+    await _seedInitialData(db);
   }
 
   Future<void> close() async {

@@ -10,7 +10,7 @@ import '../providers/property_providers.dart';
 import '../../domain/entities/property.dart';
 
 class PropertiesScreen extends ConsumerStatefulWidget {
-  const PropertiesScreen({Key? key}) : super(key: key);
+  const PropertiesScreen({super.key});
 
   @override
   ConsumerState<PropertiesScreen> createState() => _PropertiesScreenState();
@@ -344,7 +344,7 @@ class _PropertiesScreenState extends ConsumerState<PropertiesScreen> {
 class PropertyFormDialog extends ConsumerStatefulWidget {
   final Property? property;
 
-  const PropertyFormDialog({Key? key, this.property}) : super(key: key);
+  const PropertyFormDialog({super.key, this.property});
 
   @override
   ConsumerState<PropertyFormDialog> createState() => _PropertyFormDialogState();
@@ -435,8 +435,10 @@ class _PropertyFormDialogState extends ConsumerState<PropertyFormDialog> {
         final userId = ref.read(authenticatedUserIdProvider) ?? 1;
         await ref.read(updatePropertyUseCaseProvider)(property: updated, userId: userId);
       }
+      if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('حدث خطأ أثناء حفظ البيانات: $e')),
       );
@@ -601,7 +603,7 @@ class _PropertyFormDialogState extends ConsumerState<PropertyFormDialog> {
 class PropertySettingsDialog extends ConsumerStatefulWidget {
   final Property property;
 
-  const PropertySettingsDialog({Key? key, required this.property}) : super(key: key);
+  const PropertySettingsDialog({super.key, required this.property});
 
   @override
   ConsumerState<PropertySettingsDialog> createState() => _PropertySettingsDialogState();
@@ -680,11 +682,13 @@ class _PropertySettingsDialogState extends ConsumerState<PropertySettingsDialog>
           );
         }
       }
+      if (!mounted) return;
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('تم تحديث إعدادات المنشأة "${widget.property.name}" بنجاح.')),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('خطأ أثناء حفظ الإعدادات: $e')),
       );

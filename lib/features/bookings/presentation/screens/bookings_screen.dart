@@ -15,7 +15,7 @@ import '../../domain/entities/booking.dart';
 import '../providers/booking_providers.dart';
 
 class BookingsScreen extends ConsumerStatefulWidget {
-  const BookingsScreen({Key? key}) : super(key: key);
+  const BookingsScreen({super.key});
 
   @override
   ConsumerState<BookingsScreen> createState() => _BookingsScreenState();
@@ -168,18 +168,18 @@ class _BookingsScreenState extends ConsumerState<BookingsScreen> {
       ),
       data: (bookings) {
         if (bookings.isEmpty) {
-          return Center(
+          return const Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.book_online_outlined, size: 64, color: Color(0xFF94A3B8)),
-                const SizedBox(height: 16),
-                const Text(
+                Icon(Icons.book_online_outlined, size: 64, color: Color(0xFF94A3B8)),
+                SizedBox(height: 16),
+                Text(
                   'لا توجد حجوزات مسجلة لهذه المنشأة حالياً',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
                 ),
-                const SizedBox(height: 8),
-                const Text(
+                SizedBox(height: 8),
+                Text(
                   'ابدأ بإضافة حجز جديد لهذه المنشأة عبر زر الإضافة في الأعلى.',
                   style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
                 ),
@@ -218,10 +218,9 @@ class _BookingCard extends ConsumerWidget {
   final Property property;
 
   const _BookingCard({
-    Key? key,
     required this.booking,
     required this.property,
-  }) : super(key: key);
+  });
 
   Color _getStatusColor(BookingStatus status) {
     switch (status) {
@@ -433,16 +432,17 @@ class _BookingCard extends ConsumerWidget {
               Navigator.pop(dialogCtx);
               try {
                 final userId = ref.read(authenticatedUserIdProvider) ?? 1;
+                final messenger = ScaffoldMessenger.of(context);
                 await ref.read(cancelBookingUseCaseProvider).execute(
                   booking: booking,
                   updatedByUserId: userId,
                 );
-                
-                ScaffoldMessenger.of(context).showSnackBar(
+                messenger.showSnackBar(
                   SnackBar(content: Text('تم إلغاء الحجز رقم ${booking.bookingNumber} بنجاح.')),
                 );
                 ref.read(bookingsListProvider(property.id!).notifier).fetchBookings();
               } catch (e) {
+                if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('فشل الإلغاء: ${e is Failure ? e.message : e.toString()}', style: const TextStyle(color: Colors.white)), backgroundColor: Colors.red),
                 );
@@ -462,10 +462,10 @@ class BookingFormDialog extends ConsumerStatefulWidget {
   final Booking? booking;
 
   const BookingFormDialog({
-    Key? key,
+    super.key,
     required this.property,
     this.booking,
-  }) : super(key: key);
+  });
 
   @override
   ConsumerState<BookingFormDialog> createState() => _BookingFormDialogState();
@@ -938,10 +938,10 @@ class BookingDetailsDialog extends ConsumerWidget {
   final Property property;
 
   const BookingDetailsDialog({
-    Key? key,
+    super.key,
     required this.booking,
     required this.property,
-  }) : super(key: key);
+  });
 
   String _formatDate(DateTime dt) {
     return '${dt.year}/${dt.month}/${dt.day}';

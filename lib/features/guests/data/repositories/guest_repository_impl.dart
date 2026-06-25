@@ -1,55 +1,35 @@
 /// Why this file exists:
 /// Implementation of GuestRepository contract.
-/// Executes SQLite queries via DatabaseHelper and records audit entries.
+/// Delegates SQL to GuestLocalDataSource; focuses on domain mapping and audit.
 library;
 
-import '../../../../core/database/database_helper.dart';
 import '../../../../core/errors/failure.dart';
 import '../../domain/entities/guest.dart';
 import '../../domain/entities/guest_contact.dart';
 import '../../domain/repositories/guest_repository.dart';
+import '../datasources/guest_local_datasource.dart';
 import '../models/guest_model.dart';
 import '../models/guest_contact_model.dart';
 
 class GuestRepositoryImpl implements GuestRepository {
-  final _dbHelper = DatabaseHelper.instance;
+  final GuestLocalDataSource _dataSource;
+
+  GuestRepositoryImpl(this._dataSource);
 
   @override
   Future<List<Guest>> getGuests(int accountId, {bool includeArchived = false}) async {
     try {
-      final db = await _dbHelper.database;
-      final List<Map<String, dynamic>> maps;
-
-      if (includeArchived) {
-        maps = await db.query(
-          'guests',
-          where: 'account_id = ?',
-          whereArgs: [accountId],
-          orderBy: 'full_name ASC',
-        );
-      } else {
-        maps = await db.query(
-          'guests',
-          where: 'account_id = ? AND deleted_at IS NULL',
-          whereArgs: [accountId],
-          orderBy: 'full_name ASC',
-        );
-      }
-
+      final maps = await _dataSource.getGuests(accountId, includeArchived);
       final List<Guest> guests = [];
       for (final map in maps) {
-        final guestNoContacts = GuestModel.fromMap(map);
-        final contactsMaps = await db.query(
-          'guest_contacts',
-          where: 'guest_id = ?',
-          whereArgs: [guestNoContacts.id],
-        );
-        final contacts = contactsMaps.map((cMap) => GuestContactModel.fromMap(cMap)).toList();
-        guests.add(guestNoContacts.copyWith(contacts: contacts));
+        final guest = GuestModel.fromMap(map);
+        final contactMaps = await _dataSource.getGuestContacts(guest.id!);
+        final contacts = contactMaps.map((cMap) => GuestContactModel.fromMap(cMap)).toList();
+        guests.add(guest.copyWith(contacts: contacts));
       }
       return guests;
     } catch (e) {
-      throw DatabaseFailure(
+      throw const DatabaseFailure(
         code: 'GET_GUESTS_FAILED',
         message: 'حدث خطأ أثناء جلب قائمة الضيوف.',
       );
@@ -59,26 +39,14 @@ class GuestRepositoryImpl implements GuestRepository {
   @override
   Future<Guest?> getGuestById(int id) async {
     try {
-      final db = await _dbHelper.database;
-      final maps = await db.query(
-        'guests',
-        where: 'id = ?',
-        whereArgs: [id],
-        limit: 1,
-      );
-
-      if (maps.isEmpty) return null;
-
-      final guestNoContacts = GuestModel.fromMap(maps.first);
-      final contactsMaps = await db.query(
-        'guest_contacts',
-        where: 'guest_id = ?',
-        whereArgs: [id],
-      );
-      final contacts = contactsMaps.map((cMap) => GuestContactModel.fromMap(cMap)).toList();
-      return guestNoContacts.copyWith(contacts: contacts);
+      final map = await _dataSource.getGuestById(id);
+      if (map == null) return null;
+      final guest = GuestModel.fromMap(map);
+      final contactMaps = await _dataSource.getGuestContacts(id);
+      final contacts = contactMaps.map((cMap) => GuestContactModel.fromMap(cMap)).toList();
+      return guest.copyWith(contacts: contacts);
     } catch (e) {
-      throw DatabaseFailure(
+      throw const DatabaseFailure(
         code: 'GET_GUEST_BY_ID_FAILED',
         message: 'حدث خطأ أثناء جلب بيانات الضيف.',
       );
@@ -88,26 +56,14 @@ class GuestRepositoryImpl implements GuestRepository {
   @override
   Future<Guest?> getGuestByDocument(int accountId, String documentType, String documentNumber) async {
     try {
-      final db = await _dbHelper.database;
-      final maps = await db.query(
-        'guests',
-        where: 'account_id = ? AND document_type = ? AND document_number = ? AND deleted_at IS NULL',
-        whereArgs: [accountId, documentType, documentNumber],
-        limit: 1,
-      );
-
-      if (maps.isEmpty) return null;
-
-      final guestNoContacts = GuestModel.fromMap(maps.first);
-      final contactsMaps = await db.query(
-        'guest_contacts',
-        where: 'guest_id = ?',
-        whereArgs: [guestNoContacts.id],
-      );
-      final contacts = contactsMaps.map((cMap) => GuestContactModel.fromMap(cMap)).toList();
-      return guestNoContacts.copyWith(contacts: contacts);
+      final map = await _dataSource.getGuestByDocument(accountId, documentType, documentNumber);
+      if (map == null) return null;
+      final guest = GuestModel.fromMap(map);
+      final contactMaps = await _dataSource.getGuestContacts(guest.id!);
+      final contacts = contactMaps.map((cMap) => GuestContactModel.fromMap(cMap)).toList();
+      return guest.copyWith(contacts: contacts);
     } catch (e) {
-      throw DatabaseFailure(
+      throw const DatabaseFailure(
         code: 'GET_GUEST_BY_DOCUMENT_FAILED',
         message: 'حدث خطأ أثناء التحقق من وثيقة الضيف.',
       );
@@ -120,37 +76,17 @@ class GuestRepositoryImpl implements GuestRepository {
       return getGuests(accountId, includeArchived: includeArchived);
     }
     try {
-      final db = await _dbHelper.database;
-      final wildcard = '%$query%';
-      
-      String whereString = 'account_id = ? AND (full_name LIKE ? OR phone LIKE ? OR email LIKE ? OR document_number LIKE ?)';
-      List<dynamic> whereArgs = [accountId, wildcard, wildcard, wildcard, wildcard];
-
-      if (!includeArchived) {
-        whereString += ' AND deleted_at IS NULL';
-      }
-
-      final maps = await db.query(
-        'guests',
-        where: whereString,
-        whereArgs: whereArgs,
-        orderBy: 'full_name ASC',
-      );
-
+      final maps = await _dataSource.searchGuests(accountId, query, includeArchived);
       final List<Guest> guests = [];
       for (final map in maps) {
-        final guestNoContacts = GuestModel.fromMap(map);
-        final contactsMaps = await db.query(
-          'guest_contacts',
-          where: 'guest_id = ?',
-          whereArgs: [guestNoContacts.id],
-        );
-        final contacts = contactsMaps.map((cMap) => GuestContactModel.fromMap(cMap)).toList();
-        guests.add(guestNoContacts.copyWith(contacts: contacts));
+        final guest = GuestModel.fromMap(map);
+        final contactMaps = await _dataSource.getGuestContacts(guest.id!);
+        final contacts = contactMaps.map((cMap) => GuestContactModel.fromMap(cMap)).toList();
+        guests.add(guest.copyWith(contacts: contacts));
       }
       return guests;
     } catch (e) {
-      throw DatabaseFailure(
+      throw const DatabaseFailure(
         code: 'SEARCH_GUESTS_FAILED',
         message: 'حدث خطأ أثناء البحث عن الضيوف.',
       );
@@ -160,21 +96,11 @@ class GuestRepositoryImpl implements GuestRepository {
   @override
   Future<int> createGuest(Guest guest, int userId) async {
     try {
-      final db = await _dbHelper.database;
-      return await db.transaction((txn) async {
-        final guestMap = GuestModel.toMap(guest);
-        final id = await txn.insert('guests', guestMap);
-
-                // Save contacts if exist
-        for (final contact in guest.contacts) {
-          final contactMap = GuestContactModel.toMap(contact.copyWith(guestId: id));
-          await txn.insert('guest_contacts', contactMap);
-        }
-
-        return id;
-      });
+      final guestMap = GuestModel.toMap(guest);
+      final contactMaps = guest.contacts.map((c) => GuestContactModel.toMap(c)).toList();
+      return await _dataSource.createGuestWithContacts(guestMap, contactMaps);
     } catch (e) {
-      throw DatabaseFailure(
+      throw const DatabaseFailure(
         code: 'CREATE_GUEST_FAILED',
         message: 'فشل إنشاء الضيف في قاعدة البيانات.',
       );
@@ -190,30 +116,11 @@ class GuestRepositoryImpl implements GuestRepository {
       );
     }
     try {
-      final db = await _dbHelper.database;
-
-      await db.transaction((txn) async {
-        final guestMap = GuestModel.toMap(guest);
-        await txn.update(
-          'guests',
-          guestMap,
-          where: 'id = ?',
-          whereArgs: [guest.id],
-        );
-
-        // Update contacts by recreating them inside the transaction safely
-        await txn.delete(
-          'guest_contacts',
-          where: 'guest_id = ?',
-          whereArgs: [guest.id],
-        );
-        for (final contact in guest.contacts) {
-          final contactMap = GuestContactModel.toMap(contact.copyWith(guestId: guest.id));
-          await txn.insert('guest_contacts', contactMap);
-        }
-      });
+      final guestMap = GuestModel.toMap(guest);
+      final contactMaps = guest.contacts.map((c) => GuestContactModel.toMap(c.copyWith(guestId: guest.id))).toList();
+      await _dataSource.updateGuestWithContacts(guestMap, contactMaps, guest.id!);
     } catch (e) {
-      throw DatabaseFailure(
+      throw const DatabaseFailure(
         code: 'UPDATE_GUEST_FAILED',
         message: 'فشل تحديث بيانات الضيف.',
       );
@@ -223,21 +130,12 @@ class GuestRepositoryImpl implements GuestRepository {
   @override
   Future<void> archiveGuest(int id, int userId) async {
     try {
-      final db = await _dbHelper.database;
       final oldGuest = await getGuestById(id);
       if (oldGuest == null) return;
-
       final now = DateTime.now().toIso8601String();
-      await db.transaction((txn) async {
-        await txn.update(
-          'guests',
-          {'deleted_at': now, 'updated_at': now},
-          where: 'id = ?',
-          whereArgs: [id],
-        );
-      });
+      await _dataSource.archiveGuest(id, now);
     } catch (e) {
-      throw DatabaseFailure(
+      throw const DatabaseFailure(
         code: 'ARCHIVE_GUEST_FAILED',
         message: 'فشل أرشفة الضيف في قاعدة البيانات.',
       );
@@ -247,21 +145,12 @@ class GuestRepositoryImpl implements GuestRepository {
   @override
   Future<void> unarchiveGuest(int id, int userId) async {
     try {
-      final db = await _dbHelper.database;
       final oldGuest = await getGuestById(id);
       if (oldGuest == null) return;
-
       final now = DateTime.now().toIso8601String();
-      await db.transaction((txn) async {
-        await txn.update(
-          'guests',
-          {'deleted_at': null, 'updated_at': now},
-          where: 'id = ?',
-          whereArgs: [id],
-        );
-      });
+      await _dataSource.unarchiveGuest(id, now);
     } catch (e) {
-      throw DatabaseFailure(
+      throw const DatabaseFailure(
         code: 'UNARCHIVE_GUEST_FAILED',
         message: 'فشل استعادة الضيف في قاعدة البيانات.',
       );
@@ -271,15 +160,10 @@ class GuestRepositoryImpl implements GuestRepository {
   @override
   Future<List<GuestContact>> getGuestContacts(int guestId) async {
     try {
-      final db = await _dbHelper.database;
-      final maps = await db.query(
-        'guest_contacts',
-        where: 'guest_id = ?',
-        whereArgs: [guestId],
-      );
+      final maps = await _dataSource.getGuestContacts(guestId);
       return maps.map((map) => GuestContactModel.fromMap(map)).toList();
     } catch (e) {
-      throw DatabaseFailure(
+      throw const DatabaseFailure(
         code: 'GET_GUEST_CONTACTS_FAILED',
         message: 'فشل جلب اتصالات الضيف.',
       );
@@ -289,20 +173,14 @@ class GuestRepositoryImpl implements GuestRepository {
   @override
   Future<void> saveGuestContact(GuestContact contact) async {
     try {
-      final db = await _dbHelper.database;
       final map = GuestContactModel.toMap(contact);
       if (contact.id == null) {
-        await db.insert('guest_contacts', map);
+        await _dataSource.insertGuestContact(map);
       } else {
-        await db.update(
-          'guest_contacts',
-          map,
-          where: 'id = ?',
-          whereArgs: [contact.id],
-        );
+        await _dataSource.updateGuestContact(map, contact.id!);
       }
     } catch (e) {
-      throw DatabaseFailure(
+      throw const DatabaseFailure(
         code: 'SAVE_GUEST_CONTACT_FAILED',
         message: 'فشل حفظ اتصال الضيف.',
       );
@@ -312,14 +190,9 @@ class GuestRepositoryImpl implements GuestRepository {
   @override
   Future<void> deleteGuestContact(int contactId) async {
     try {
-      final db = await _dbHelper.database;
-      await db.delete(
-        'guest_contacts',
-        where: 'id = ?',
-        whereArgs: [contactId],
-      );
+      await _dataSource.deleteGuestContact(contactId);
     } catch (e) {
-      throw DatabaseFailure(
+      throw const DatabaseFailure(
         code: 'DELETE_GUEST_CONTACT_FAILED',
         message: 'فشل حذف اتصال الضيف.',
       );

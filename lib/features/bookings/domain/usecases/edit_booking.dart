@@ -84,7 +84,7 @@ class EditBookingUseCase {
     if (existingBooking.status == BookingStatus.checkedOut ||
         existingBooking.status == BookingStatus.cancelled ||
         existingBooking.status == BookingStatus.noShow) {
-      throw BusinessRuleFailure(
+      throw const BusinessRuleFailure(
         code: 'EDIT_FORBIDDEN_STATUS',
         message: 'لا يمكن تعديل الحجز إطلاقاً بعد الخروج، الإلغاء أو عدم الحضور (Cannot edit CheckedOut, Cancelled, or NoShow booking).',
       );
@@ -103,7 +103,7 @@ class EditBookingUseCase {
                          existingBooking.checkOutDate != newCheckOutDate;
 
     if (existingBooking.status == BookingStatus.checkedIn && datesChanged) {
-      throw BusinessRuleFailure(
+      throw const BusinessRuleFailure(
         code: 'EDIT_FINANCIAL_FORBIDDEN',
         message: 'تم تسجيل دخول النزيل بالفعل. يمنع تعديل البيانات المالية كالتواريخ وقيم الليلة مباشرة. يرجى استخدام المعالجات المالية والتسويات المعتمدة (Dating and rates cannot be updated directly once Checked In).',
       );

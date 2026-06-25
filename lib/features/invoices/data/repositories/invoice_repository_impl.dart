@@ -1,9 +1,9 @@
 /// Why the file exists:
 /// Implements [InvoiceRepository] using sqflite, managing transactions,
 /// ensuring safe updates, freezing totals, dynamic outstanding calculations, and audit logging.
+/// Delegates raw SQL to InvoiceLocalDataSource.
 library;
 
-import '../../../../core/database/database_helper.dart';
 import '../../../../core/errors/failure.dart';
 import '../../../../core/common/enums/invoice_status.dart';
 import '../../../../core/common/models/money.dart';
@@ -11,50 +11,31 @@ import '../../domain/repositories/invoice_repository.dart';
 import '../../domain/entities/invoice.dart';
 import '../../domain/entities/invoice_adjustment.dart';
 import '../../domain/entities/invoice_line.dart';
+import '../datasources/invoice_local_datasource.dart';
 import '../models/invoice_model.dart';
 import '../models/invoice_line_model.dart';
 import '../models/invoice_adjustment_model.dart';
 
 class InvoiceRepositoryImpl implements InvoiceRepository {
-  final _dbHelper = DatabaseHelper.instance;
+  final InvoiceLocalDataSource _dataSource;
 
-  InvoiceRepositoryImpl();
+  InvoiceRepositoryImpl(this._dataSource);
 
   @override
   Future<Invoice?> getInvoiceById(int id) async {
     try {
-      final db = await _dbHelper.database;
-      final invoiceMaps = await db.query(
-        'invoices',
-        where: 'id = ?',
-        whereArgs: [id],
-        limit: 1,
-      );
+      final invoiceMap = await _dataSource.getInvoiceById(id);
+      if (invoiceMap == null) return null;
 
-      if (invoiceMaps.isEmpty) return null;
-
-      final lineMaps = await db.query(
-        'invoice_lines',
-        where: 'invoice_id = ?',
-        whereArgs: [id],
-      );
-
-      final adjustmentMaps = await db.query(
-        'invoice_adjustments',
-        where: 'invoice_id = ?',
-        whereArgs: [id],
-      );
+      final lineMaps = await _dataSource.getLinesByInvoiceId(id);
+      final adjustmentMaps = await _dataSource.getAdjustmentsByInvoiceId(id);
 
       final lines = lineMaps.map((m) => InvoiceLineModel.fromMap(m)).toList();
       final adjustments = adjustmentMaps.map((m) => InvoiceAdjustmentModel.fromMap(m)).toList();
 
-      return InvoiceModel.fromMap(
-        invoiceMaps.first,
-        lines: lines,
-        adjustments: adjustments,
-      );
+      return InvoiceModel.fromMap(invoiceMap, lines: lines, adjustments: adjustments);
     } catch (e) {
-      throw DatabaseFailure(
+      throw const DatabaseFailure(
         code: 'GET_INVOICE_BY_ID_FAILED',
         message: 'حدث خطأ أثناء جلب الفاتورة من قاعدة البيانات.',
       );
@@ -64,39 +45,19 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
   @override
   Future<Invoice?> getInvoiceByBookingId(int bookingId) async {
     try {
-      final db = await _dbHelper.database;
-      final invoiceMaps = await db.query(
-        'invoices',
-        where: 'booking_id = ?',
-        whereArgs: [bookingId],
-        limit: 1,
-      );
+      final invoiceMap = await _dataSource.getInvoiceByBookingId(bookingId);
+      if (invoiceMap == null) return null;
 
-      if (invoiceMaps.isEmpty) return null;
-      final id = invoiceMaps.first['id'] as int;
-
-      final lineMaps = await db.query(
-        'invoice_lines',
-        where: 'invoice_id = ?',
-        whereArgs: [id],
-      );
-
-      final adjustmentMaps = await db.query(
-        'invoice_adjustments',
-        where: 'invoice_id = ?',
-        whereArgs: [id],
-      );
+      final id = invoiceMap['id'] as int;
+      final lineMaps = await _dataSource.getLinesByInvoiceId(id);
+      final adjustmentMaps = await _dataSource.getAdjustmentsByInvoiceId(id);
 
       final lines = lineMaps.map((m) => InvoiceLineModel.fromMap(m)).toList();
       final adjustments = adjustmentMaps.map((m) => InvoiceAdjustmentModel.fromMap(m)).toList();
 
-      return InvoiceModel.fromMap(
-        invoiceMaps.first,
-        lines: lines,
-        adjustments: adjustments,
-      );
+      return InvoiceModel.fromMap(invoiceMap, lines: lines, adjustments: adjustments);
     } catch (e) {
-      throw DatabaseFailure(
+      throw const DatabaseFailure(
         code: 'GET_INVOICE_BY_BOOKING_FAILED',
         message: 'حدث خطأ أثناء جلب فاتورة الحجز.',
       );
@@ -106,32 +67,13 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
   @override
   Future<List<Invoice>> getInvoices(int accountId) async {
     try {
-      final db = await _dbHelper.database;
-      
-      // Invoices belong to bookings, which belong to properties, which belong to accounts.
-      final maps = await db.rawQuery('''
-        SELECT i.* FROM invoices i
-        JOIN bookings b ON i.booking_id = b.id
-        JOIN properties p ON b.property_id = p.id
-        WHERE p.account_id = ?
-        ORDER BY i.created_at DESC
-      ''', [accountId]);
-
+      final maps = await _dataSource.getInvoicesByAccount(accountId);
       if (maps.isEmpty) return const [];
 
       final invoiceIds = maps.map((row) => row['id'] as int).toList();
-      final placeholders = List.filled(invoiceIds.length, '?').join(', ');
+      final lineMaps = await _dataSource.getBatchLines(invoiceIds);
+      final adjustmentMaps = await _dataSource.getBatchAdjustments(invoiceIds);
 
-      // Batch query lines & adjustments for all retrieved invoices of this account
-      final lineMaps = await db.rawQuery('''
-        SELECT * FROM invoice_lines WHERE invoice_id IN ($placeholders)
-      ''', invoiceIds);
-
-      final adjustmentMaps = await db.rawQuery('''
-        SELECT * FROM invoice_adjustments WHERE invoice_id IN ($placeholders)
-      ''', invoiceIds);
-
-      // Group elements by parent invoice ID
       final Map<int, List<InvoiceLine>> linesByInvoiceId = {};
       for (final map in lineMaps) {
         final invoiceId = map['invoice_id'] as int;
@@ -151,18 +93,11 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
         final id = map['id'] as int;
         final lines = linesByInvoiceId[id] ?? [];
         final adjustments = adjustmentsByInvoiceId[id] ?? [];
-
-        results.add(
-          InvoiceModel.fromMap(
-            map,
-            lines: lines,
-            adjustments: adjustments,
-          ),
-        );
+        results.add(InvoiceModel.fromMap(map, lines: lines, adjustments: adjustments));
       }
       return results;
     } catch (e) {
-      throw DatabaseFailure(
+      throw const DatabaseFailure(
         code: 'GET_INVOICES_FAILED',
         message: 'حدث خطأ أثناء جلب الفواتير للحساب من قاعدة البيانات.',
       );
@@ -172,33 +107,14 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
   @override
   Future<int> createInvoice(Invoice invoice, int userId) async {
     try {
-      final db = await _dbHelper.database;
-      return await db.transaction((txn) async {
-        final invoiceMap = InvoiceModel.toMap(invoice);
-        final id = await txn.insert('invoices', invoiceMap);
-
-        // Insert invoice lines if any exist
-        for (final line in invoice.lines) {
-          await txn.insert(
-            'invoice_lines',
-            InvoiceLineModel.toMap(line.copyWith(invoiceId: id)),
-          );
-        }
-
-        // Insert invoice adjustments if any exist
-        for (final adj in invoice.adjustments) {
-          await txn.insert(
-            'invoice_adjustments',
-            InvoiceAdjustmentModel.toMap(adj.copyWith(invoiceId: id)),
-          );
-        }
-
-        return id;
-      });
+      final invoiceMap = InvoiceModel.toMap(invoice);
+      final lineMaps = invoice.lines.map((l) => InvoiceLineModel.toMap(l)).toList();
+      final adjustmentMaps = invoice.adjustments.map((a) => InvoiceAdjustmentModel.toMap(a)).toList();
+      return await _dataSource.createInvoiceWithDetails(invoiceMap, lineMaps, adjustmentMaps);
     } on Failure {
       rethrow;
     } catch (e) {
-      throw DatabaseFailure(
+      throw const DatabaseFailure(
         code: 'CREATE_INVOICE_FAILED',
         message: 'فشل إنشاء الفاتورة في قاعدة البيانات.',
       );
@@ -214,61 +130,35 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
       );
     }
     try {
-      final db = await _dbHelper.database;
-      await db.transaction((txn) async {
-        final existingMaps = await txn.query(
-          'invoices',
-          where: 'id = ?',
-          whereArgs: [invoice.id],
-          limit: 1,
-        );
+      final invoiceMap = InvoiceModel.toMap(invoice);
+      final lineMaps = invoice.lines.map((l) => InvoiceLineModel.toMap(l.copyWith(invoiceId: invoice.id))).toList();
+      final adjustmentMaps = invoice.adjustments.map((a) => InvoiceAdjustmentModel.toMap(a.copyWith(invoiceId: invoice.id))).toList();
 
-        if (existingMaps.isEmpty) {
-          throw const ValidationFailure(
-            code: 'INVOICE_NOT_FOUND',
-            message: 'الفاتورة غير موجودة لتحديثها في النظام.',
-          );
-        }
-
-        // Perform updates
-        final invoiceMap = InvoiceModel.toMap(invoice);
-        await txn.update(
-          'invoices',
-          invoiceMap,
-          where: 'id = ?',
-          whereArgs: [invoice.id],
+      final existing = await _dataSource.getInvoiceById(invoice.id!);
+      if (existing == null) {
+        throw const ValidationFailure(
+          code: 'INVOICE_NOT_FOUND',
+          message: 'الفاتورة غير موجودة لتحديثها في النظام.',
         );
+      }
 
-        // Re-sync lines (easiest is deleting and recreating lines inside transaction)
-        await txn.delete(
-          'invoice_lines',
-          where: 'invoice_id = ?',
-          whereArgs: [invoice.id],
-        );
-        for (final line in invoice.lines) {
-          await txn.insert(
-            'invoice_lines',
-            InvoiceLineModel.toMap(line.copyWith(invoiceId: invoice.id)),
-          );
-        }
+      await _dataSource.deleteLinesByInvoiceId(invoice.id!);
+      for (final line in lineMaps) {
+        line['invoice_id'] = invoice.id!;
+        await _dataSource.insertLine(line);
+      }
 
-        // Re-sync adjustments
-        await txn.delete(
-          'invoice_adjustments',
-          where: 'invoice_id = ?',
-          whereArgs: [invoice.id],
-        );
-        for (final adj in invoice.adjustments) {
-          await txn.insert(
-            'invoice_adjustments',
-            InvoiceAdjustmentModel.toMap(adj.copyWith(invoiceId: invoice.id)),
-          );
-        }
-      });
+      await _dataSource.deleteAdjustmentsByInvoiceId(invoice.id!);
+      for (final adj in adjustmentMaps) {
+        adj['invoice_id'] = invoice.id!;
+        await _dataSource.insertAdjustment(adj);
+      }
+
+      await _dataSource.updateInvoice(invoiceMap, invoice.id!);
     } on Failure {
       rethrow;
     } catch (e) {
-      throw DatabaseFailure(
+      throw const DatabaseFailure(
         code: 'UPDATE_INVOICE_FAILED',
         message: 'فشل تحديث الفاتورة والتزامن.',
       );
@@ -284,14 +174,11 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
       );
     }
     try {
-      final db = await _dbHelper.database;
-      await db.transaction((txn) async {
-        await txn.insert('invoice_lines', InvoiceLineModel.toMap(line));
-      });
+      await _dataSource.insertLine(InvoiceLineModel.toMap(line));
     } on Failure {
       rethrow;
     } catch (e) {
-      throw DatabaseFailure(
+      throw const DatabaseFailure(
         code: 'ADD_INVOICE_LINE_FAILED',
         message: 'فشل إضافة بند الفاتورة.',
       );
@@ -301,32 +188,18 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
   @override
   Future<void> removeInvoiceLine(int lineId, int userId) async {
     try {
-      final db = await _dbHelper.database;
-      await db.transaction((txn) async {
-        final lineMaps = await txn.query(
-          'invoice_lines',
-          where: 'id = ?',
-          whereArgs: [lineId],
-          limit: 1,
+      final lineMap = await _dataSource.getLineById(lineId);
+      if (lineMap == null) {
+        throw const ValidationFailure(
+          code: 'LINE_NOT_FOUND',
+          message: 'بند الفاتورة المطلوب غير موجود في النظام.',
         );
-
-        if (lineMaps.isEmpty) {
-          throw const ValidationFailure(
-            code: 'LINE_NOT_FOUND',
-            message: 'بند الفاتورة المطلوب غير موجود في النظام.',
-          );
-        }
-
-        await txn.delete(
-          'invoice_lines',
-          where: 'id = ?',
-          whereArgs: [lineId],
-        );
-      });
+      }
+      await _dataSource.deleteLine(lineId);
     } on Failure {
       rethrow;
     } catch (e) {
-      throw DatabaseFailure(
+      throw const DatabaseFailure(
         code: 'REMOVE_INVOICE_LINE_FAILED',
         message: 'فشل حذف بند الفاتورة.',
       );
@@ -342,14 +215,11 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
       );
     }
     try {
-      final db = await _dbHelper.database;
-      await db.transaction((txn) async {
-        await txn.insert('invoice_adjustments', InvoiceAdjustmentModel.toMap(adjustment));
-      });
+      await _dataSource.insertAdjustment(InvoiceAdjustmentModel.toMap(adjustment));
     } on Failure {
       rethrow;
     } catch (e) {
-      throw DatabaseFailure(
+      throw const DatabaseFailure(
         code: 'ADD_ADJUSTMENT_FAILED',
         message: 'فشل إضافة تعديل الفاتورة الحسابي.',
       );
@@ -359,32 +229,23 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
   @override
   Future<void> issueInvoice(int invoiceId, Money frozenTotal, int userId) async {
     try {
-      final db = await _dbHelper.database;
-      await db.transaction((txn) async {
-        final now = DateTime.now().toIso8601String();
-        final updatedRows = await txn.update(
-          'invoices',
-          {
-            'status': InvoiceStatus.issued.name,
-            'total_amount': frozenTotal.minorUnits, // Freeze the calculated total strictly
-            'issued_at': now,
-            'updated_at': now,
-          },
-          where: 'id = ?',
-          whereArgs: [invoiceId],
-        );
-
-        if (updatedRows == 0) {
-          throw const ValidationFailure(
-            code: 'INVOICE_NOT_FOUND',
-            message: 'الفاتورة غير موجودة في قاعدة البيانات.',
-          );
-        }
+      final now = DateTime.now().toIso8601String();
+      final updatedRows = await _dataSource.updateInvoiceStatus(invoiceId, {
+        'status': InvoiceStatus.issued.name,
+        'total_amount': frozenTotal.minorUnits,
+        'issued_at': now,
+        'updated_at': now,
       });
+      if (updatedRows == 0) {
+        throw const ValidationFailure(
+          code: 'INVOICE_NOT_FOUND',
+          message: 'الفاتورة غير موجودة في قاعدة البيانات.',
+        );
+      }
     } on Failure {
       rethrow;
     } catch (e) {
-      throw DatabaseFailure(
+      throw const DatabaseFailure(
         code: 'ISSUE_INVOICE_FAILED',
         message: 'فشل إصدار الفاتورة في النظام المالي.',
       );
@@ -394,30 +255,21 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
   @override
   Future<void> cancelInvoice(int invoiceId, int userId) async {
     try {
-      final db = await _dbHelper.database;
-      await db.transaction((txn) async {
-        final now = DateTime.now().toIso8601String();
-        final updatedRows = await txn.update(
-          'invoices',
-          {
-            'status': InvoiceStatus.cancelled.name,
-            'updated_at': now,
-          },
-          where: 'id = ?',
-          whereArgs: [invoiceId],
-        );
-
-        if (updatedRows == 0) {
-          throw const ValidationFailure(
-            code: 'INVOICE_NOT_FOUND',
-            message: 'الفاتورة غير موجودة لتحديث حالتها إلى ملغاة.',
-          );
-        }
+      final now = DateTime.now().toIso8601String();
+      final updatedRows = await _dataSource.updateInvoiceStatus(invoiceId, {
+        'status': InvoiceStatus.cancelled.name,
+        'updated_at': now,
       });
+      if (updatedRows == 0) {
+        throw const ValidationFailure(
+          code: 'INVOICE_NOT_FOUND',
+          message: 'الفاتورة غير موجودة لتحديث حالتها إلى ملغاة.',
+        );
+      }
     } on Failure {
       rethrow;
     } catch (e) {
-      throw DatabaseFailure(
+      throw const DatabaseFailure(
         code: 'CANCEL_INVOICE_FAILED',
         message: 'فشل إلغاء الفاتورة.',
       );
@@ -427,20 +279,12 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
   @override
   Future<int?> getInvoiceIdByLineId(int lineId) async {
     try {
-      final db = await _dbHelper.database;
-      final maps = await db.query(
-        'invoice_lines',
-        columns: ['invoice_id'],
-        where: 'id = ?',
-        whereArgs: [lineId],
-        limit: 1,
-      );
-      if (maps.isEmpty) return null;
-      return maps.first['invoice_id'] as int?;
+      final map = await _dataSource.getLineById(lineId);
+      return map?['invoice_id'] as int?;
     } catch (e) {
-      throw DatabaseFailure(
+      throw const DatabaseFailure(
         code: 'GET_INVOICE_ID_BY_LINE_FAILED',
-        message: 'حدث خطأ أثناء جلب معرّف الفاتورة للبند: $e',
+        message: 'حدث خطأ أثناء جلب معرّف الفاتورة للبند.',
       );
     }
   }
@@ -448,17 +292,11 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
   @override
   Future<List<Map<String, dynamic>>> getUninvoicedBookings() async {
     try {
-      final db = await _dbHelper.database;
-      return await db.rawQuery('''
-        SELECT b.id, b.booking_number, g.full_name as guest_name 
-        FROM bookings b 
-        JOIN guests g ON b.primary_guest_id = g.id 
-        WHERE b.id NOT IN (SELECT booking_id FROM invoices)
-      ''');
+      return await _dataSource.getUninvoicedBookings();
     } catch (e) {
-      throw DatabaseFailure(
+      throw const DatabaseFailure(
         code: 'GET_UNINVOICED_BOOKINGS_FAILED',
-        message: 'حدث خطأ أثناء جلب الحجوزات غير المفوترة: $e',
+        message: 'حدث خطأ أثناء جلب الحجوزات غير المفوترة.',
       );
     }
   }

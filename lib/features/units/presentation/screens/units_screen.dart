@@ -12,7 +12,7 @@ import '../../domain/entities/unit.dart';
 import '../../../../core/common/enums/unit_status.dart';
 
 class UnitsScreen extends ConsumerStatefulWidget {
-  const UnitsScreen({Key? key}) : super(key: key);
+  const UnitsScreen({super.key});
 
   @override
   ConsumerState<UnitsScreen> createState() => _UnitsScreenState();
@@ -359,7 +359,7 @@ class UnitFormDialog extends ConsumerStatefulWidget {
   final int propertyId;
   final Unit? unit;
 
-  const UnitFormDialog({Key? key, required this.propertyId, this.unit}) : super(key: key);
+  const UnitFormDialog({super.key, required this.propertyId, this.unit});
 
   @override
   ConsumerState<UnitFormDialog> createState() => _UnitFormDialogState();
@@ -442,8 +442,10 @@ class _UnitFormDialogState extends ConsumerState<UnitFormDialog> {
         final userId = ref.read(authenticatedUserIdProvider) ?? 1;
         await ref.read(updateUnitUseCaseProvider)(unit: updated, userId: userId);
       }
+      if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('حدث خطأ أثناء حفظ الغرفة: $e')),
       );

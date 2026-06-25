@@ -13,11 +13,18 @@ import '../features/units/presentation/screens/units_screen.dart';
 import '../features/guests/presentation/screens/guests_screen.dart';
 import '../features/invoices/presentation/screens/invoices_screen.dart';
 import '../features/bookings/presentation/screens/bookings_screen.dart';
+import '../features/payments/presentation/screens/payments_screen.dart';
+import '../features/settlements/presentation/screens/settlements_screen.dart';
+import '../features/expenses/presentation/screens/expenses_screen.dart';
+import '../features/reports/presentation/screens/reports_screen.dart';
+import '../features/backup/presentation/screens/backup_screen.dart';
+import '../features/settings/presentation/screens/settings_screen.dart';
 import '../features/properties/presentation/providers/property_providers.dart';
+import '../features/properties/presentation/providers/dashboard_providers.dart';
 import '../features/properties/domain/entities/property.dart';
 
 class PropertyManagementSystemApp extends StatelessWidget {
-  const PropertyManagementSystemApp({Key? key}) : super(key: key);
+  const PropertyManagementSystemApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +51,7 @@ class PropertyManagementSystemApp extends StatelessWidget {
 /// Dynamic State-aware dashboard managing Phase 1 layouts and active views.
 /// Built with strict [UX_Guidelines.md] Sidebar layouts.
 class PMSDashboardHomeScreen extends ConsumerStatefulWidget {
-  const PMSDashboardHomeScreen({Key? key}) : super(key: key);
+  const PMSDashboardHomeScreen({super.key});
 
   @override
   ConsumerState<PMSDashboardHomeScreen> createState() => _PMSDashboardHomeScreenState();
@@ -67,6 +74,18 @@ class _PMSDashboardHomeScreenState extends ConsumerState<PMSDashboardHomeScreen>
         return const GuestsScreen();
       case 5:
         return const InvoicesScreen();
+      case 6:
+        return const PaymentsScreen();
+      case 7:
+        return const ReportsScreen();
+      case 8:
+        return const BackupScreen();
+      case 9:
+        return const ExpensesScreen();
+      case 10:
+        return const SettlementsScreen();
+      case 11:
+        return const SettingsScreen();
       default:
         return _buildPhasePlaceholderView(context);
     }
@@ -157,22 +176,22 @@ class _PMSDashboardHomeScreenState extends ConsumerState<PMSDashboardHomeScreen>
               crossAxisSpacing: 20,
               mainAxisSpacing: 20,
               physics: const NeverScrollableScrollPhysics(),
-              children: const [
-                _BentoMetricCard(
+              children: [
+                _MetricCard(
                   title: 'إجمالي الغرف والوحدات المتاحة',
-                  value: 'نشطة مفعّلة',
+                  provider: activeUnitsCountProvider,
                   color: Color(0xFF10B981),
                   icon: Icons.meeting_room,
                 ),
-                _BentoMetricCard(
+                _MetricCard(
                   title: 'الحجوزات النشطة (Active Bookings)',
-                  value: 'بانتظار الإدخال',
+                  provider: activeBookingsCountProvider,
                   color: Color(0xFF3B82F6),
                   icon: Icons.book_online,
                 ),
-                _BentoMetricCard(
+                _MetricCard(
                   title: 'العمليات والتدقيقات المحفوظة',
-                  value: 'آمنة وقابلة للتتبع',
+                  provider: auditLogsCountProvider,
                   color: Color(0xFFF59E0B),
                   icon: Icons.security,
                 ),
@@ -262,26 +281,24 @@ class _PMSDashboardHomeScreenState extends ConsumerState<PMSDashboardHomeScreen>
       body: Row(
         children: [
           // Sidebar Panel - Implements [UX-200]
-          Container(
+          SizedBox(
             width: 260,
-            color: const Color(0xFF0F172A),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 24),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Text(
-                    'PMS CONTROL PANEL',
-                    style: textTheme.bodyLarge?.copyWith(
-                      color: Colors.white,
-                      fontFamily: 'Space Grotesk',
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.0,
+            child: Container(
+              color: const Color(0xFF0F172A),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                    child: Text(
+                      'PMS CONTROL PANEL',
+                      style: textTheme.bodyLarge?.copyWith(
+                        color: Colors.white,
+                        fontFamily: 'Space Grotesk',
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.0,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 20),
                 
                 // Dynamic active property dropdown directly inside Sidebar!
                 propertiesAsync.when(
@@ -327,69 +344,89 @@ class _PMSDashboardHomeScreenState extends ConsumerState<PMSDashboardHomeScreen>
                   },
                 ),
                 
-                const Divider(color: Colors.white12, height: 16),
-                _SidebarItem(
-                  icon: Icons.dashboard, 
-                  title: 'الرئيسية (Dashboard)', 
-                  isActive: _selectedIndex == 0,
-                  onTap: () => setState(() => _selectedIndex = 0),
+                Expanded(
+                  child: ListView(
+                    children: [
+                      const Divider(color: Colors.white12, height: 16),
+                      _SidebarItem(
+                        icon: Icons.dashboard, 
+                        title: 'الرئيسية (Dashboard)', 
+                        isActive: _selectedIndex == 0,
+                        onTap: () => setState(() => _selectedIndex = 0),
+                      ),
+                      _SidebarItem(
+                        icon: Icons.business, 
+                        title: 'العقارات والمنشآت (Properties)', 
+                        isActive: _selectedIndex == 1,
+                        onTap: () => setState(() => _selectedIndex = 1),
+                      ),
+                      _SidebarItem(
+                        icon: Icons.meeting_room, 
+                        title: 'الوحدات السكنية (Units)', 
+                        isActive: _selectedIndex == 2,
+                        onTap: () => setState(() => _selectedIndex = 2),
+                      ),
+                      _SidebarItem(
+                        icon: Icons.book_online, 
+                        title: 'إدارة الحجوزات (Bookings)', 
+                        isActive: _selectedIndex == 3,
+                        onTap: () => setState(() => _selectedIndex = 3),
+                      ),
+                      _SidebarItem(
+                        icon: Icons.people, 
+                        title: 'دليل النزلاء (Guests)', 
+                        isActive: _selectedIndex == 4,
+                        onTap: () => setState(() => _selectedIndex = 4),
+                      ),
+                      _SidebarItem(
+                        icon: Icons.receipt_long, 
+                        title: 'الفواتير (Invoices)', 
+                        isActive: _selectedIndex == 5,
+                        onTap: () => setState(() => _selectedIndex = 5),
+                      ),
+                      _SidebarItem(
+                        icon: Icons.account_balance_wallet, 
+                        title: 'المدفوعات والتسوية (Payments)', 
+                        isActive: _selectedIndex == 6,
+                        onTap: () => setState(() => _selectedIndex = 6),
+                      ),
+                      _SidebarItem(
+                        icon: Icons.monetization_on, 
+                        title: 'المصروفات (Expenses)', 
+                        isActive: _selectedIndex == 9,
+                        onTap: () => setState(() => _selectedIndex = 9),
+                      ),
+                      _SidebarItem(
+                        icon: Icons.balance, 
+                        title: 'التسويات (Settlements)', 
+                        isActive: _selectedIndex == 10,
+                        onTap: () => setState(() => _selectedIndex = 10),
+                      ),
+                      _SidebarItem(
+                        icon: Icons.analytics, 
+                        title: 'التقارير المتقدمة (Reports)', 
+                        isActive: _selectedIndex == 7,
+                        onTap: () => setState(() => _selectedIndex = 7),
+                      ),
+                      _SidebarItem(
+                        icon: Icons.backup, 
+                        title: 'النسخ الاحتياطي (Backup)', 
+                        isActive: _selectedIndex == 8,
+                        onTap: () => setState(() => _selectedIndex = 8),
+                      ),
+                      _SidebarItem(
+                        icon: Icons.settings, 
+                        title: 'الإعدادات (Settings)', 
+                        isActive: _selectedIndex == 11,
+                        onTap: () => setState(() => _selectedIndex = 11),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
                 ),
-                _SidebarItem(
-                  icon: Icons.business, 
-                  title: 'العقارات والمنشآت (Properties)', 
-                  isActive: _selectedIndex == 1,
-                  onTap: () => setState(() => _selectedIndex = 1),
-                ),
-                _SidebarItem(
-                  icon: Icons.meeting_room, 
-                  title: 'الوحدات السكنية (Units)', 
-                  isActive: _selectedIndex == 2,
-                  onTap: () => setState(() => _selectedIndex = 2),
-                ),
-                
-                // Other Phases Sidebar Items
-                _SidebarItem(
-                  icon: Icons.book_online, 
-                  title: 'إدارة الحجوزات (Bookings)', 
-                  isActive: _selectedIndex == 3,
-                  onTap: () => setState(() => _selectedIndex = 3),
-                ),
-                _SidebarItem(
-                  icon: Icons.people, 
-                  title: 'دليل النزلاء (Guests)', 
-                  isActive: _selectedIndex == 4,
-                  onTap: () => setState(() => _selectedIndex = 4),
-                ),
-                _SidebarItem(
-                  icon: Icons.receipt_long, 
-                  title: 'الفواتير (Invoices)', 
-                  isActive: _selectedIndex == 5,
-                  onTap: () => setState(() => _selectedIndex = 5),
-                ),
-                _SidebarItem(
-                  icon: Icons.account_balance_wallet, 
-                  title: 'المدفوعات والتسوية (Payments)', 
-                  isActive: _selectedIndex == 6,
-                  onTap: () => setState(() => _selectedIndex = 6),
-                ),
-                _SidebarItem(
-                  icon: Icons.analytics, 
-                  title: 'التقارير المتقدمة (Reports)', 
-                  isActive: _selectedIndex == 7,
-                  onTap: () => setState(() => _selectedIndex = 7),
-                ),
-                
-                const Spacer(),
-                const Divider(color: Colors.white12),
-                _SidebarItem(
-                  icon: Icons.backup, 
-                  title: 'النسخ الاحتياطي (Backup)', 
-                  isActive: _selectedIndex == 8,
-                  onTap: () => setState(() => _selectedIndex = 8),
-                ),
-                const SizedBox(height: 24),
               ],
             ),
+          ),
           ),
           
           // Dynamic Central Body Area
@@ -407,95 +444,104 @@ class _SidebarItem extends StatelessWidget {
   final VoidCallback onTap;
 
   const _SidebarItem({
-    Key? key,
     required this.icon,
     required this.title,
     required this.onTap,
     this.isActive = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      decoration: BoxDecoration(
-        color: isActive ? Colors.white.withValues(alpha: 0.12) : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: ListTile(
-        leading: Icon(icon, color: isActive ? Colors.white : Colors.white70, size: 20),
-        title: Text(
-          title,
-          style: TextStyle(
-            color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.9),
-            fontSize: 13,
-            fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Material(
+        color: Colors.transparent,
+        child: ListTile(
+          tileColor: isActive ? Colors.white.withValues(alpha: 0.12) : Colors.transparent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          leading: Icon(icon, color: isActive ? Colors.white : Colors.white70, size: 20),
+          title: Text(
+            title,
+            style: TextStyle(
+              color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.9),
+              fontSize: 13,
+              fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
+            ),
           ),
+          dense: true,
+          onTap: onTap,
         ),
-        dense: true,
-        onTap: onTap,
       ),
     );
   }
 }
 
-class _BentoMetricCard extends StatelessWidget {
+class _MetricCard extends ConsumerWidget {
   final String title;
-  final String value;
+  final AutoDisposeFutureProvider<int> provider;
   final Color color;
   final IconData icon;
 
-  const _BentoMetricCard({
-    Key? key,
+  const _MetricCard({
     required this.title,
-    required this.value,
+    required this.provider,
     required this.color,
     required this.icon,
-  }) : super(key: key);
+  });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final countAsync = ref.watch(provider);
     return Card(
       elevation: 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                CircleAvatar(
-                  backgroundColor: color.withValues(alpha: 0.1),
-                  child: Icon(icon, color: color),
-                ),
-              ],
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: color.withValues(alpha: 0.1),
+              child: Icon(icon, color: color, size: 18),
             ),
-            const SizedBox(height: 16),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFF64748B),
-                    fontWeight: FontWeight.w500,
-                  ),
+            const SizedBox(height: 10),
+            Text(
+              title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 11,
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 2),
+            countAsync.when(
+              data: (count) => Text(
+                count.toString(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF0F172A),
-                  ),
+              ),
+              loading: () => const SizedBox(
+                width: 16, height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              error: (_, __) => Text(
+                '---',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF94A3B8),
                 ),
-              ],
-            )
+              ),
+            ),
           ],
         ),
       ),

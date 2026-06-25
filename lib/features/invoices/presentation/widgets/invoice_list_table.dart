@@ -14,9 +14,9 @@ class InvoiceListTable extends ConsumerStatefulWidget {
   final Function(Invoice invoice) onViewDetails;
 
   const InvoiceListTable({
-    Key? key,
+    super.key,
     required this.onViewDetails,
-  }) : super(key: key);
+  });
 
   @override
   ConsumerState<InvoiceListTable> createState() => _InvoiceListTableState();
@@ -124,8 +124,8 @@ class _InvoiceListTableState extends ConsumerState<InvoiceListTable> {
                     Container(
                       color: const Color(0xFFF8FAFC),
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                      child: Row(
-                        children: const [
+                      child: const Row(
+                        children: [
                           Expanded(flex: 2, child: Text('رقم الفاتورة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)))),
                           Expanded(flex: 2, child: Text('حساب الحجز', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)))),
                           Expanded(flex: 2, child: Text('المجموع الإجمالي', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)))),
